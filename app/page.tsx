@@ -1,15 +1,11 @@
 'use client'
-
 import Image from "next/image";
 import {
-  Bell,
   BookOpen,
   ChevronRight,
-  Coins,
   Crown,
   Feather,
   Gamepad2,
-  Gem,
   Layers,
   Play,
   Settings,
@@ -20,80 +16,116 @@ import {
   Users,
 } from "lucide-react";
 import { JSX } from "react";
+import { useRouter } from "next/navigation";
 
 export default function App(): JSX.Element {
+  const router = useRouter();
+
   return (
     <div className="bg-[#f5f0e8] text-[#2c2c2c] w-screen h-screen overflow-hidden">
       <div className="flex w-full h-full">
-
-        {/* Sidebar */}
+        
+        {/* SIDEBAR - LIGHT FANTASY THEME */}
         <aside
-          className="hidden md:flex flex-col justify-between w-64 p-4 lg:p-8 border-r border-[#c9a84c66] shrink-0"
-          style={{ background: "linear-gradient(180deg, #faf6ed 0%, #f5f0e8 100%)" }}
+          className="hidden md:flex flex-col justify-between w-64 p-4 lg:p-6 shrink-0 relative z-20 border-r border-[#c9a84c]/40"
+          style={{ 
+            background: "linear-gradient(180deg, #fdfbf7 0%, #f5f0e8 100%)",
+            boxShadow: "4px 0 24px rgba(201,168,76,0.05)"
+          }}
         >
-          <div className="flex flex-col gap-8 lg:gap-12">
+          {/* Subtle parchment texture overlay */}
+          <div 
+            className="absolute inset-0 pointer-events-none opacity-[0.02]" 
+            style={{ backgroundImage: "repeating-linear-gradient(45deg, #1e3a6e, #1e3a6e 1px, transparent 1px, transparent 4px)" }} 
+          />
 
-            {/* Logo */}
-            <div className="flex flex-col items-start gap-2">
-              <div className="flex items-center gap-2">
-                <div
-                  className="rounded-lg flex justify-center items-center w-10 h-10 shrink-0"
-                  style={{ background: "linear-gradient(135deg, #c9a84c 0%, #b8860b 100%)" }}
-                >
-                  <Crown className="size-5 text-[#faf6ed]" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="uppercase text-[10px] tracking-[4.8px] text-[#8b7d6b]">
-                    Anno MMXXV
-                  </span>
-                  <span className="font-semibold text-lg leading-7 tracking-wide text-[#1e3a6e]">
-                    SoulChess
-                  </span>
-                </div>
+          <div className="flex flex-col gap-6 lg:gap-8 relative z-10 pt-2">
+            
+            {/* Logo Section */}
+            <div className="flex flex-col items-center gap-3">
+              <div 
+                className="relative flex justify-center items-center w-14 h-14 shrink-0 rounded-full border border-[#c9a84c] bg-linear-to-br from-[#fdfbf7] to-[#ece4d3]"
+                style={{ boxShadow: "0 4px 12px rgba(201,168,76,0.15), inset 0 0 10px rgba(255,255,255,0.8)" }}
+              >
+                <Crown className="size-6 text-[#b8860b] drop-shadow-sm" />
+                {/* Decorative outer ring */}
+                <div className="absolute -inset-1 border border-[#c9a84c] rounded-full opacity-40 border-dashed" />
               </div>
-              <div
-                className="w-full h-px"
-                style={{ background: "linear-gradient(90deg, transparent, #c9a84c, transparent)" }}
-              />
+              <div className="flex flex-col items-center text-center">
+                <span 
+                  className="font-serif font-bold text-2xl tracking-[0.15em] text-[#1e3a6e] uppercase" 
+                >
+                  SoulChess
+                </span>
+                <span className="uppercase text-[9px] tracking-[0.4em] text-[#8b7d6b] mt-1 font-medium">
+                  Anno MMXXV
+                </span>
+              </div>
             </div>
 
-            {/* Nav */}
-            <nav className="flex flex-col gap-2">
-              <span className="uppercase text-[10px] tracking-[4.8px] mb-2 text-[#8b7d6b]">
-                Menu
+            {/* Ornate Divider */}
+            <div className="flex items-center w-full opacity-60">
+              <div className="h-px flex-1 bg-linear-to-r from-transparent to-[#c9a84c]" />
+              <div className="w-1.5 h-1.5 rotate-45 border border-[#c9a84c] mx-2 bg-[#fdfbf7]" />
+              <div className="h-px flex-1 bg-linear-to-l from-transparent to-[#c9a84c]" />
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex flex-col gap-3">
+              <span className="font-serif italic text-[11px] tracking-widest mb-1 text-[#8b7d6b] text-center">
+                ~ Tome of Tactics ~
               </span>
+              
+              {/* Active Menu Item */}
               <button
-                className="rounded-lg border border-[#c9a84c] flex justify-start items-center gap-4 w-full h-12 px-4 text-[#fff4c2] cursor-pointer transition-opacity hover:opacity-90 shrink-0"
-                style={{ background: "linear-gradient(135deg, #1e3a6e 0%, #2a4a85 100%)" }}
+                onClick={() => router.push("/play/local")}
+                className="relative group flex justify-start items-center gap-4 w-full h-12 px-4 cursor-pointer transition-all overflow-hidden border border-[#c9a84c]/40 bg-linear-to-r from-[#c9a84c]/10 to-transparent"
               >
-                <Gamepad2 className="size-4 shrink-0" />
-                <span className="font-medium tracking-wide">Play</span>
-                <ChevronRight className="size-4 ml-auto shrink-0" />
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c9a84c] shadow-[0_0_8px_#c9a84c]" />
+
+                <Gamepad2 className="size-5 shrink-0 text-[#1e3a6e]" />
+
+                <span className="font-serif font-semibold tracking-widest text-sm text-[#1e3a6e]">
+                  PLAY
+                </span>
+
+                <ChevronRight className="size-4 ml-auto shrink-0 text-[#c9a84c]" />
               </button>
-              <button className="rounded-lg flex justify-start items-center gap-4 w-full h-12 px-4 text-[#2c2c2c] bg-transparent cursor-pointer hover:bg-black/5 transition-colors shrink-0">
-                <Layers className="size-4 text-[#b8860b] shrink-0" />
-                <span className="font-medium tracking-wide">Decks</span>
+
+              {/* Inactive Menu Items */}
+              <button className="group flex justify-start items-center gap-4 w-full h-12 px-4 border border-transparent hover:border-[#c9a84c]/30 hover:bg-[#c9a84c]/5 transition-all cursor-pointer">
+                <Layers className="size-5 shrink-0 text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors" />
+                <span className="font-serif tracking-widest text-sm text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors">DECKS</span>
               </button>
-              <button className="rounded-lg flex justify-start items-center gap-4 w-full h-12 px-4 text-[#2c2c2c] bg-transparent cursor-pointer hover:bg-black/5 transition-colors shrink-0">
-                <Settings className="size-4 text-[#b8860b] shrink-0" />
-                <span className="font-medium tracking-wide">Settings</span>
+              
+              <button className="group flex justify-start items-center gap-4 w-full h-12 px-4 border border-transparent hover:border-[#c9a84c]/30 hover:bg-[#c9a84c]/5 transition-all cursor-pointer">
+                <Settings className="size-5 shrink-0 text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors" />
+                <span className="font-serif tracking-widest text-sm text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors">SETTINGS</span>
               </button>
             </nav>
           </div>
 
-          {/* User profile */}
-          <div className="flex flex-col gap-4">
-            <div
-              className="w-full h-px shrink-0"
-              style={{ background: "linear-gradient(90deg, transparent, #c9a84c, transparent)" }}
-            />
-            <div className="flex items-center gap-2">
-              <div className="border-2 border-[#c9a84c] w-10 h-10 rounded-full flex items-center justify-center bg-[#1e3a6e] text-[#fff4c2] text-sm font-semibold shrink-0">
-                AR
+          {/* User Profile Section */}
+          <div className="flex flex-col gap-4 relative z-10">
+            {/* Ornate Divider */}
+            <div className="flex items-center w-full opacity-60">
+              <div className="h-px flex-1 bg-linear-to-r from-transparent to-[#c9a84c]" />
+              <div className="w-1.5 h-1.5 rotate-45 border border-[#c9a84c] mx-2 bg-[#fdfbf7]" />
+              <div className="h-px flex-1 bg-linear-to-l from-transparent to-[#c9a84c]" />
+            </div>
+
+            <div className="flex items-center gap-3 bg-[#c9a84c]/5 p-2.5 border border-[#c9a84c]/20 hover:border-[#c9a84c]/50 hover:bg-[#c9a84c]/10 transition-colors cursor-pointer group">
+              <div className="relative flex items-center justify-center w-11 h-11 shrink-0 bg-linear-to-br from-[#1e3a6e] to-[#2a4a85] border border-[#c9a84c] shadow-sm">
+                <span className="font-serif text-[#fff4c2] text-sm font-bold">AR</span>
+                {/* RPG Style Rank Gem */}
+                <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 rotate-45 bg-[#b8860b] border border-[#fdfbf7] flex items-center justify-center shadow-md">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#fff4c2] animate-pulse" />
+                </div>
               </div>
+              
               <div className="flex flex-col overflow-hidden">
-                <span className="font-semibold text-sm leading-5 truncate">Archmage Rowan</span>
-                <span className="text-xs leading-4 flex items-center gap-1 text-[#b8860b] whitespace-nowrap">
+                <span className="font-serif font-semibold text-sm text-[#1e3a6e] truncate">Archmage Rowan</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider flex items-center gap-1 text-[#b8860b] whitespace-nowrap mt-0.5">
                   <Sparkles className="size-3 shrink-0" />
                   Grandmaster · 2410
                 </span>
@@ -102,7 +134,7 @@ export default function App(): JSX.Element {
           </div>
         </aside>
 
-        {/* Main content */}
+        {/* MAIN CONTENT */}
         <main
           className="relative p-6 lg:p-12 flex-1 flex flex-col overflow-hidden"
           style={{
@@ -121,9 +153,8 @@ export default function App(): JSX.Element {
               WebkitMaskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)",
             }}
           />
-
           {/* Top bar */}
-          <div className="z-10 flex absolute inset-x-6 lg:inset-x-12 top-6 lg:top-8 justify-between items-center hidden sm:flex">
+          <div className="z-10 flex absolute inset-x-6 lg:inset-x-12 top-6 lg:top-8 justify-between items-center sm:flex">
             <div className="flex items-center gap-2">
               <Sun className="size-4 text-[#b8860b]" />
               <span className="uppercase text-[10px] lg:text-xs leading-4 tracking-[4px] text-[#8b7d6b]">
@@ -131,11 +162,8 @@ export default function App(): JSX.Element {
               </span>
             </div>
           </div>
-
           {/* Hero content */}
           <div className="relative z-10 flex flex-col justify-center items-center h-full min-h-0 py-8">
-
-            {/* Welcome line - Smaller margins */}
             <div className="flex mb-3 lg:mb-4 items-center gap-2 lg:gap-4">
               <div
                 className="w-10 lg:w-16 h-px"
@@ -151,10 +179,9 @@ export default function App(): JSX.Element {
                 style={{ background: "linear-gradient(90deg, #c9a84c, transparent)" }}
               />
             </div>
-
-            {/* Title - Reduced font size and line height */}
+            {/* Title */}
             <h1
-              className="font-light text-center text-4xl md:text-5xl lg:text-6xl leading-tight lg:leading-[60px] tracking-[2.4px] text-[#1e3a6e] shrink-0"
+              className="font-light text-center text-4xl md:text-5xl lg:text-6xl leading-tight lg:leading-15 tracking-[2.4px] text-[#1e3a6e] shrink-0"
               style={{ fontFamily: "serif" }}
             >
               SOUL
@@ -172,8 +199,7 @@ export default function App(): JSX.Element {
             <p className="uppercase text-[9px] lg:text-[11px] leading-5 tracking-[2px] lg:tracking-[4px] mt-1 lg:mt-2 text-[#8b7d6b] text-center">
               · A Game of Mind, Magic &amp; Mastery ·
             </p>
-
-            {/* Hero image - Increased height allocation (40vh instead of 25vh) */}
+            {/* Hero image */}
             <div className="relative mt-4 lg:mt-8 shrink min-h-0 flex justify-center items-center">
               <div
                 className="opacity-40 rounded-full absolute inset-0 lg:-inset-8 scale-150"
@@ -181,7 +207,7 @@ export default function App(): JSX.Element {
               />
               <Image
                 alt="Chess King"
-                className="relative object-contain w-auto h-[40vh] max-h-[400px] min-h-[160px]"
+                className="relative object-contain w-auto h-[30vh] max-h-100 min-h-40"
                 src="/images/piece2.png"
                 width={400}
                 height={400}
@@ -190,8 +216,7 @@ export default function App(): JSX.Element {
                 }}
               />
             </div>
-
-            {/* CTA buttons - Tighter spacing and slightly smaller buttons */}
+            {/* CTA buttons */}
             <div className="flex mt-6 lg:mt-10 flex-col items-center gap-3 shrink-0 w-full max-w-lg">
               <button
                 className="font-medium uppercase flex items-center justify-center rounded-lg text-xs lg:text-sm leading-6 tracking-[3px] lg:tracking-[4px] border-2 border-[#fff4c2] px-8 lg:px-12 h-10 lg:h-12 text-[#faf6ed] cursor-pointer transition-opacity hover:opacity-90 w-full sm:w-auto"
@@ -219,10 +244,9 @@ export default function App(): JSX.Element {
               </div>
             </div>
           </div>
-
           {/* Bottom bar */}
           <div className="z-10 flex absolute inset-x-6 lg:inset-x-12 bottom-6 lg:bottom-8 justify-between items-center">
-            <div className="text-[10px] lg:text-xs leading-4 flex items-center gap-2 text-[#8b7d6b] hidden sm:flex">
+            <div className="text-[10px] lg:text-xs leading-4 items-center gap-2 text-[#8b7d6b] hidden sm:flex">
               <Feather className="size-3 shrink-0" />
               <span className="italic">&quot;The board is a battlefield of souls.&quot;</span>
             </div>
