@@ -1,8 +1,6 @@
 // ============================================================
 // SOULCHESS — Game Engine (Pure Reducer)
 // ============================================================
-// Turn rule: 1 action (MOVE or ATTACK) → auto-switch player.
-// ============================================================
 import type {
   GameState, GameAction, Piece, Tile, Player, Coord, TurnRecord, DeckConfig,
 } from "../types/game";
@@ -18,24 +16,20 @@ function makePiece(definitionId: string, owner: Player, position: Coord): Piece 
   const def = getPieceDefinitionById(definitionId);
   return {
     id: `${definitionId}_${owner}_${++_uid}`,
-    definitionId,
-    owner,
-    hp:      def.maxHp,
-    maxHp:   def.maxHp,
-    attack:  def.attack,
-    defense: def.defense,
-    position,
-    hasActed: false,
+    definitionId, owner,
+    hp: def.maxHp, maxHp: def.maxHp,
+    attack: def.attack, defense: def.defense,
+    position, hasActed: false,
     abilities: def.abilities.map(ab => ({ ...ab, currentCooldown: 0 })),
     buffs: [],
   };
 }
 
-// ─── Deck deployment ─────────────────────────────────────────
-// Formation grid: 5 cols × 4 rows = 20 slots
-// slotIndex = formRow * 5 + formCol
-// white → board rows 13 (back) to 10 (front), cols 6–10
-// black → board rows 2  (back) to 5  (front), cols 6–10
+// ─── Deploy decks ────────────────────────────────────────────
+// Slots are stored in white-perspective coords (row 11–15).
+// Black is mirrored: blackRow = 15 - whiteRow
+//   white row 15 → black row 0  (back rank)
+//   white row 11 → black row 4  (front)
 function deployDeck(
   deck: DeckConfig,
   owner: Player,
@@ -45,14 +39,15 @@ function deployDeck(
   let kingId = "";
 
   for (const slot of deck.slots) {
-    const formRow = Math.floor(slot.slotIndex / 5);
-    const formCol = slot.slotIndex % 5;
-
-    const boardRow = owner === "white" ? 13 - formRow : 2 + formRow;
-    const boardCol = 6 + formCol;
+    const boardRow = owner === "white"
+      ? slot.coord.row
+      : 15 - slot.coord.row;
+    const boardCol = slot.coord.col;
 
     if (!isInsideOctagon(boardRow, boardCol)) continue;
-    if (Object.values(out).some(p => p.position.row === boardRow && p.position.col === boardCol)) continue;
+    if (Object.values(out).some(p =>
+      p.position.row === boardRow && p.position.col === boardCol
+    )) continue;
 
     const piece = makePiece(slot.definitionId, owner, { row: boardRow, col: boardCol });
     out[piece.id] = piece;
@@ -62,7 +57,7 @@ function deployDeck(
   return { pieces: out, kingId };
 }
 
-// ─── Board sync ───────────────────────────────────────────────
+// ─── Board sync ──────────────────────────────────────────────
 function syncBoard(board: Tile[][], pieces: Record<string, Piece>): Tile[][] {
   const next = board.map(r => r.map(t => ({ ...t, pieceId: undefined as string | undefined })));
   for (const p of Object.values(pieces)) {
@@ -74,8 +69,7 @@ function syncBoard(board: Tile[][], pieces: Record<string, Piece>): Tile[][] {
   return next;
 }
 
-// ─── Movement helpers ────────────────────────────────────────
-// White pawns move toward row 0; black toward row 15
+// ─── Movement ────────────────────────────────────────────────
 function pawnDir(owner: Player) { return owner === "white" ? -1 : 1; }
 
 function calcMoves(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
@@ -116,7 +110,7 @@ function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
     }
   }
 
-  // Iron Pawn: attacks diagonally forward only (special case)
+  // Pawn: diagonal forward attacks only
   if (piece.definitionId === "iron_pawn") {
     const dir = pawnDir(piece.owner);
     for (const dc of [-1, 1]) {
@@ -130,8 +124,8 @@ function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
   return valid;
 }
 
-// ─── Tile stat modifiers ─────────────────────────────────────
-function tileMods(tile: Tile): { atk: number; def: number } {
+// ─── Tile mods ───────────────────────────────────────────────
+function tileMods(tile: Tile) {
   switch (tile.effect) {
     case "amplify": return { atk:  1, def:  0 };
     case "shield":  return { atk:  0, def:  1 };
@@ -140,119 +134,87 @@ function tileMods(tile: Tile): { atk: number; def: number } {
   }
 }
 
-// ─── Auto-switch after 1 action ──────────────────────────────
+// ─── Auto-switch ─────────────────────────────────────────────
 function switchPlayer(state: GameState): GameState {
   const next: Player = state.currentPlayer === "white" ? "black" : "white";
-  const newTurn = next === "white" ? state.turnNumber + 1 : state.turnNumber;
-
   const newPieces: Record<string, Piece> = {};
   for (const [id, p] of Object.entries(state.pieces)) {
     newPieces[id] = {
-      ...p,
-      hasActed: false,
+      ...p, hasActed: false,
       buffs: p.buffs
         .map(b => ({ ...b, duration: b.duration === -1 ? -1 : b.duration - 1 }))
         .filter(b => b.duration !== 0),
       abilities: p.abilities.map(ab => ({
-        ...ab,
-        currentCooldown: Math.max(0, ab.currentCooldown - 1),
+        ...ab, currentCooldown: Math.max(0, ab.currentCooldown - 1),
       })),
     };
   }
-
   return {
     ...state,
     currentPlayer: next,
-    turnNumber: newTurn,
+    turnNumber: next === "white" ? state.turnNumber + 1 : state.turnNumber,
     pieces: newPieces,
     board: syncBoard(clearHighlights(state.board), newPieces),
     selectedPieceId: null,
-    validMoves: [],
-    validAttacks: [],
-    validAbilityTargets: [],
-    activeAbilityId: null,
+    validMoves: [], validAttacks: [], validAbilityTargets: [], activeAbilityId: null,
   };
 }
 
-// ─── Win condition ────────────────────────────────────────────
+// ─── Win check ───────────────────────────────────────────────
 function checkWin(state: GameState): Player | null {
   if (state.kingIds.white && !state.pieces[state.kingIds.white]) return "black";
   if (state.kingIds.black && !state.pieces[state.kingIds.black]) return "white";
   return null;
 }
 
-// ─── Public: create initial state from two decks ─────────────
-export function createInitialState(
-  whiteDeck: DeckConfig,
-  blackDeck: DeckConfig,
-): GameState {
+// ─── Public API ──────────────────────────────────────────────
+export function createInitialState(whiteDeck: DeckConfig, blackDeck: DeckConfig): GameState {
   const board = createBoard();
   let pieces: Record<string, Piece> = {};
-
   const { pieces: p1, kingId: wk } = deployDeck(whiteDeck, "white", pieces);
   pieces = p1;
   const { pieces: p2, kingId: bk } = deployDeck(blackDeck, "black", pieces);
   pieces = p2;
 
   return {
-    phase: "battle",
-    currentPlayer: "white",
-    turnNumber: 1,
-    board: syncBoard(board, pieces),
-    pieces,
-    selectedPieceId: null,
-    validMoves: [],
-    validAttacks: [],
-    validAbilityTargets: [],
-    activeAbilityId: null,
-    kingIds: { white: wk, black: bk },
-    history: [],
-    winner: null,
+    phase: "battle", currentPlayer: "white", turnNumber: 1,
+    board: syncBoard(board, pieces), pieces,
+    selectedPieceId: null, validMoves: [], validAttacks: [],
+    validAbilityTargets: [], activeAbilityId: null,
+    kingIds: { white: wk, black: bk }, history: [], winner: null,
   };
 }
 
-// ─── Main reducer ─────────────────────────────────────────────
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
 
-    // ── SELECT PIECE ──────────────────────────────────────────
     case "SELECT_PIECE": {
       if (state.phase !== "battle") return state;
       const piece = state.pieces[action.pieceId];
       if (!piece || piece.owner !== state.currentPlayer || piece.hasActed) return state;
-
       const pieceMap = buildPieceMap(state.pieces);
       const moves   = calcMoves(piece, pieceMap);
       const attacks = calcAttacks(piece, pieceMap);
-
       return {
-        ...state,
-        selectedPieceId: piece.id,
-        validMoves: moves,
-        validAttacks: attacks,
+        ...state, selectedPieceId: piece.id,
+        validMoves: moves, validAttacks: attacks,
         board: applyHighlights(clearHighlights(state.board), piece.position, moves, attacks, []),
       };
     }
 
-    // ── DESELECT ──────────────────────────────────────────────
     case "DESELECT":
       return {
-        ...state,
-        selectedPieceId: null,
-        validMoves: [],
-        validAttacks: [],
-        validAbilityTargets: [],
+        ...state, selectedPieceId: null,
+        validMoves: [], validAttacks: [], validAbilityTargets: [],
         board: clearHighlights(state.board),
       };
 
-    // ── MOVE PIECE → auto-switch ──────────────────────────────
     case "MOVE_PIECE": {
       if (!state.selectedPieceId || state.phase !== "battle") return state;
       const piece = state.pieces[state.selectedPieceId];
       if (!piece || piece.hasActed) return state;
       if (!state.validMoves.some(m => coordsEqual(m, action.to))) return state;
 
-      // Portal teleport
       let dest = action.to;
       const destTile = state.board[dest.row][dest.col];
       if (destTile.effect === "portal" && destTile.portalTarget) {
@@ -260,10 +222,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (!state.board[pt.row][pt.col].pieceId) dest = pt;
       }
 
-      // Build updated piece
       let moved: Piece = { ...piece, position: dest, hasActed: true };
-
-      // Sacred tile: heal 1 HP on landing
       const landTile = state.board[dest.row][dest.col];
       if (landTile.effect === "sacred" && moved.maxHp > 0) {
         moved = { ...moved, hp: Math.min(moved.maxHp, moved.hp + 1) };
@@ -273,17 +232,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         turn: state.turnNumber, player: state.currentPlayer,
         action: "move", pieceId: piece.id, from: piece.position, to: dest,
       };
-
       const newPieces = { ...state.pieces, [piece.id]: moved };
-      const next = switchPlayer({
-        ...state,
-        pieces: newPieces,
-        history: [...state.history, record],
-      });
+      const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
       return { ...next, winner: checkWin(next) };
     }
 
-    // ── ATTACK PIECE → auto-switch ────────────────────────────
     case "ATTACK_PIECE": {
       if (!state.selectedPieceId || state.phase !== "battle") return state;
       const attacker = state.pieces[state.selectedPieceId];
@@ -291,23 +244,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!attacker || !defender || attacker.hasActed) return state;
       if (!state.validAttacks.some(a => coordsEqual(a, defender.position))) return state;
 
-      // Apply tile + buff modifiers
       const am = tileMods(state.board[attacker.position.row][attacker.position.col]);
       const dm = tileMods(state.board[defender.position.row][defender.position.col]);
-      const atkBuff = attacker.buffs.reduce((s, b) => s + b.attackMod,  0);
+      const atkBuff = attacker.buffs.reduce((s, b) => s + b.attackMod, 0);
       const defBuff = defender.buffs.reduce((s, b) => s + b.defenseMod, 0);
 
-      const effAtk = { ...attacker, attack:  attacker.attack  + am.atk + atkBuff };
+      const effAtk = { ...attacker, attack:  attacker.attack + am.atk + atkBuff };
       const effDef = { ...defender, defense: Math.max(0, defender.defense + dm.def + defBuff) };
-
       const { damage, isLethal } = resolveAttack(effAtk, effDef);
 
       const newPieces = { ...state.pieces };
-      if (isLethal) {
-        delete newPieces[defender.id];
-      } else {
-        newPieces[defender.id] = { ...defender, hp: defender.hp - damage };
-      }
+      if (isLethal) delete newPieces[defender.id];
+      else newPieces[defender.id] = { ...defender, hp: defender.hp - damage };
       newPieces[attacker.id] = { ...attacker, hasActed: true };
 
       const record: TurnRecord = {
@@ -316,12 +264,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         from: attacker.position, to: defender.position,
         damage, capturedPieceId: isLethal ? defender.id : undefined,
       };
-
-      const next = switchPlayer({
-        ...state,
-        pieces: newPieces,
-        history: [...state.history, record],
-      });
+      const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
       const winner = checkWin(next);
       return { ...next, winner, phase: winner ? "ended" : next.phase };
     }

@@ -1,11 +1,11 @@
 // ============================================================
-// SOULCHESS — Core Type Definitions (canonical, v2)
+// SOULCHESS — Core Type Definitions
 // ============================================================
 
 export type Player = "white" | "black";
 export type GamePhase = "battle" | "ended";
 export type ActionType = "move" | "attack";
-export type TileHighlight = "none" | "selected" | "move" | "attack" | "ability";
+export type TileHighlight = "none" | "selected" | "move" | "attack" | "ability" | "deploy";
 
 // ─── Coordinate ──────────────────────────────────────────────
 export interface Coord {
@@ -14,9 +14,8 @@ export interface Coord {
 }
 
 // ─── Movement Pattern ────────────────────────────────────────
-// [deltaRow, deltaCol, maxSteps]  — 0 = unlimited slider
 export interface MovementPattern {
-  directions: Array<[number, number, number]>;
+  directions: Array<[number, number, number]>; // [dr, dc, maxSteps] — 0 = unlimited
   canLeap: boolean;
 }
 
@@ -30,7 +29,7 @@ export interface Ability {
   range: number;
 }
 
-// ─── Piece Definition (static data in registry) ──────────────
+// ─── Piece Definition (static) ───────────────────────────────
 export interface PieceDefinition {
   typeId: string;
   name: string;
@@ -55,7 +54,7 @@ export interface Piece {
   attack: number;
   defense: number;
   position: Coord;
-  hasActed: boolean;    // used its 1 action this turn
+  hasActed: boolean;
   abilities: Ability[];
   buffs: Buff[];
 }
@@ -64,7 +63,7 @@ export interface Piece {
 export interface Buff {
   id: string;
   name: string;
-  duration: number;     // turns remaining; -1 = permanent
+  duration: number;     // -1 = permanent
   attackMod: number;
   defenseMod: number;
   movementMod: number;
@@ -84,16 +83,18 @@ export interface Tile {
 }
 
 // ─── Deck / Formation ────────────────────────────────────────
-// slotIndex = row * 5 + col  (5 cols × 4 rows = 20 slots)
+// Slot now stores a free coord on the board, not a grid index.
+// Both players share one deck; coords are stored as white-perspective
+// (white zone = row 11-15). Engine mirrors for black.
 export interface FormationSlot {
-  slotIndex: number;
+  coord: Coord;         // board coordinate in white's deploy zone (row 11-15)
   definitionId: string;
 }
 
 export interface DeckConfig {
   id: string;
   name: string;
-  slots: FormationSlot[];
+  slots: FormationSlot[]; // up to 20
 }
 
 // ─── Turn Record ─────────────────────────────────────────────

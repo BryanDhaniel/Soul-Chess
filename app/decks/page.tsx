@@ -1,48 +1,48 @@
 // ============================================================
-// SOULCHESS — /decks  (Deck Builder + Formation Editor)
+// SOULCHESS — /decks  Deck Builder
+// ============================================================
+// Layout:
+//   Left sidebar  — deck list (create / rename / delete / set active)
+//   Centre        — octagon board preview; click deploy zone to place
+//   Right sidebar — piece roster (click to select, shows detail)
 // ============================================================
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronLeft, Plus, Trash2, Save, Crown, Swords, Shield,
-  Heart, Edit2, Check, X, Play, Star,
+  ChevronLeft, Plus, Trash2, Edit2, Star, Play,
+  Heart, Swords, Shield, X, Crown,
 } from "lucide-react";
-import type { DeckConfig, FormationSlot, PieceDefinition } from "../types/game";
-import { getAllDefinitions } from "../lib/pieceRegistry";
+import type { DeckConfig, FormationSlot, PieceDefinition, Coord } from "../types/game";
+import { getAllDefinitions, getPieceDefinitionById } from "../lib/pieceRegistry";
 import {
   loadDecks, saveDecks, loadActiveDeckId, saveActiveDeckId,
   createNewDeck, upsertDeck, deleteDeck, makeDefaultDeck,
+  isInDeployZone, WHITE_ZONE_MIN_ROW, WHITE_ZONE_MAX_ROW, MAX_PIECES,
 } from "../lib/deckStorage";
+import {
+  isInsideOctagon, createBoard, coordKey, GRID_SIZE,
+} from "../lib/boardUtils";
 
 // ─── Constants ───────────────────────────────────────────────
-const FORM_COLS = 5;
-const FORM_ROWS = 4;
-const MAX_PIECES = FORM_COLS * FORM_ROWS; // 20
-
-const TIER_COLOR: Record<number, string> = {
-  1: "#8b7d6b",
-  2: "#3b82f6",
-  3: "#b8860b",
-};
 const FACTION_COLOR: Record<string, string> = {
-  Arcane: "#c9a84c",
-  Void:   "#9b6de0",
-  Iron:   "#7a8fa0",
-  Fire:   "#e05c2a",
+  Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0", Fire: "#e05c2a",
 };
+const TIER_COLOR: Record<number, string> = { 1: "#8b7d6b", 2: "#3b82f6", 3: "#b8860b" };
 
-// ─── Small helpers ───────────────────────────────────────────
-function slotKey(slot: number) { return `slot_${slot}`; }
-function pieceCount(deck: DeckConfig) { return deck.slots.length; }
+// Pre-build a flat tile list for the board preview (created once)
+const BOARD_TILES = createBoard().flat().filter(t => t.isInside);
 
-// ─── Sub-components ──────────────────────────────────────────
-
+// ─── Piece Card (roster) ─────────────────────────────────────
 function PieceCard({
-  def, selected, onClick,
-}: { def: PieceDefinition; selected: boolean; onClick: () => void }) {
+  def, selected, count, onClick,
+}: {
+  def: PieceDefinition;
+  selected: boolean;
+  count: number;         // how many in current deck
+  onClick: () => void;
+}) {
   const fc = FACTION_COLOR[def.faction] ?? "#c9a84c";
-  const tc = TIER_COLOR[def.tier];
   return (
     <button
       onClick={onClick}
@@ -55,9 +55,11 @@ function PieceCard({
     >
       <span className="text-lg leading-none shrink-0">{def.symbol}</span>
       <div className="flex flex-col flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-1">
           <span className="font-serif font-semibold text-xs text-[#1e3a6e] truncate">{def.name}</span>
-          <span className="text-[8px] uppercase tracking-wider shrink-0" style={{ color: tc }}>T{def.tier}</span>
+          <span className="text-[8px] uppercase tracking-wider shrink-0" style={{ color: TIER_COLOR[def.tier] }}>
+            T{def.tier}
+          </span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[9px] text-[#8b7d6b] flex items-center gap-0.5">
@@ -69,97 +71,193 @@ function PieceCard({
           <span className="text-[9px] text-[#8b7d6b] flex items-center gap-0.5">
             <Shield className="size-2.5" />{def.defense}
           </span>
+          {count > 0 && (
+            <span
+              className="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: `${fc}25`, color: fc }}
+            >
+              ×{count}
+            </span>
+          )}
         </div>
       </div>
     </button>
   );
 }
 
-function FormationGrid({
-  deck, selectedDef, onSlotClick, onSlotClear,
+// ─── Board preview ───────────────────────────────────────────
+function BoardPreview({
+  slots,
+  selectedDef,
+  onTileClick,
 }: {
-  deck: DeckConfig;
+  slots: FormationSlot[];
   selectedDef: PieceDefinition | null;
-  onSlotClick: (slotIndex: number) => void;
-  onSlotClear: (slotIndex: number) => void;
+  onTileClick: (coord: Coord) => void;
 }) {
-  const slotMap = new Map(deck.slots.map(s => [s.slotIndex, s.definitionId]));
-  const defs = getAllDefinitions();
-  const defMap = new Map(defs.map(d => [d.typeId, d]));
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [cellSize, setCellSize] = useState(28);
+
+  useEffect(() => {
+    const update = () => {
+      if (containerRef.current)
+        setCellSize(Math.floor(containerRef.current.offsetWidth / GRID_SIZE));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Build lookup: coordKey → definitionId
+  // Filter out any stale slots that lack a valid coord (old format used slotIndex)
+  const slotMap = new Map(
+    slots
+      .filter(s => s.coord != null && typeof s.coord.row === "number")
+      .map(s => [coordKey(s.coord), s.definitionId])
+  );
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Label */}
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest text-[#8b7d6b]">
-          Formation Grid · {pieceCount(deck)}/{MAX_PIECES} pieces
-        </span>
-        <div className="flex items-center gap-3 text-[9px] text-[#8b7d6b]">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-[#e8dcc8] border border-[#c9a84c30]" />
-            Empty slot
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-[#c9a84c25] border border-[#c9a84c]" />
-            Filled
-          </span>
-        </div>
-      </div>
-
-      {/* Direction labels */}
-      <div className="text-center text-[9px] uppercase tracking-[0.3em] text-[#8b7d6b] mb-0.5">
-        ← Enemy Side
-      </div>
-
-      {/* Grid */}
+    <div
+      ref={containerRef}
+      className="relative w-full overflow-hidden"
+      style={{
+        aspectRatio: "1/1",
+        background: "linear-gradient(135deg,#e4dcce 0%,#c3b9a5 100%)",
+        border: "2px solid #2c2c2c",
+        borderRadius: 8,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+      }}
+    >
       <div
-        className="grid gap-1.5 mx-auto w-full"
-        style={{ gridTemplateColumns: `repeat(${FORM_COLS}, minmax(0, 1fr))` }}
+        className="absolute inset-0 grid"
+        style={{
+          gridTemplateColumns: `repeat(${GRID_SIZE},1fr)`,
+          gridTemplateRows: `repeat(${GRID_SIZE},1fr)`,
+        }}
       >
-        {Array.from({ length: MAX_PIECES }, (_, i) => {
-          const defId = slotMap.get(i);
-          const def = defId ? defMap.get(defId) : null;
-          const fc = def ? (FACTION_COLOR[def.faction] ?? "#c9a84c") : null;
+        {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
+          const row = Math.floor(i / GRID_SIZE);
+          const col = i % GRID_SIZE;
+
+          if (!isInsideOctagon(row, col)) {
+            return <div key={i} style={{ background: "transparent" }} />;
+          }
+
+          const coord: Coord = { row, col };
+          const key = coordKey(coord);
+          const inZone = isInDeployZone(coord);
+          const defId  = slotMap.get(key);
+          const def    = defId ? getPieceDefinitionById(defId) : null;
+          const fc     = def ? (FACTION_COLOR[def.faction] ?? "#c9a84c") : null;
+          const isLight = (row + col) % 2 === 0;
+
+          // Colour logic
+          const bg = isLight ? "#f8f4ec" : "#2c2c2c";
+          let overlay: React.CSSProperties | null = null;
+          let cursor = "default";
+
+          if (inZone) {
+            // Deploy zone tint
+            overlay = {
+              position: "absolute", inset: 0,
+              background: def
+                ? `${fc}20`
+                : selectedDef
+                  ? "rgba(201,168,76,0.08)"
+                  : "rgba(74,222,128,0.06)",
+              pointerEvents: "none",
+            };
+            cursor = "pointer";
+          }
 
           return (
             <div
               key={i}
-              className="relative aspect-square rounded-md border flex items-center justify-center cursor-pointer transition-all hover:scale-105 group"
+              className="relative w-full h-full flex items-center justify-center transition-all duration-100"
               style={{
-                background: def ? `${fc}15` : "rgba(232,220,200,0.5)",
-                borderColor: def ? (fc ?? "#c9a84c") : "#c9a84c30",
-                boxShadow: def ? `0 0 0 1px ${fc}50` : "none",
+                background: bg,
+                cursor,
+                boxShadow: inZone && selectedDef && !def
+                  ? "inset 0 0 0 1px rgba(201,168,76,0.35)"
+                  : "none",
               }}
-              onClick={() => onSlotClick(i)}
+              onClick={() => inZone && onTileClick(coord)}
             >
-              {def ? (
-                <>
-                  <span className="text-base leading-none select-none">{def.symbol}</span>
-                  {/* Clear button */}
+              {/* Zone tint */}
+              {inZone && <div style={overlay ?? {}} />}
+
+              {/* Zone border highlight on hover */}
+              {inZone && !def && selectedDef && (
+                <div
+                  className="absolute inset-0 pointer-events-none opacity-0 hover:opacity-100 transition-opacity"
+                  style={{ background: "rgba(201,168,76,0.18)" }}
+                />
+              )}
+
+              {/* Placed piece */}
+              {def && (
+                <div
+                  className="relative flex items-center justify-center rounded-full z-10"
+                  style={{
+                    width: Math.max(12, cellSize * 0.7),
+                    height: Math.max(12, cellSize * 0.7),
+                    fontSize: Math.max(7, cellSize * 0.42),
+                    background: "linear-gradient(135deg,#fdfbf7 0%,#e8e0d0 100%)",
+                    border: `1.5px solid ${fc}`,
+                    boxShadow: `0 0 0 1px ${fc}60`,
+                  }}
+                >
+                  <span style={{ lineHeight: 1, display: "block", marginTop: 1 }}>{def.symbol}</span>
+                  {/* Remove button */}
                   <button
-                    onClick={e => { e.stopPropagation(); onSlotClear(i); }}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#f87171] border border-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    onClick={e => { e.stopPropagation(); onTileClick(coord); }}
+                    className="absolute -top-1 -right-1 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer z-20"
+                    style={{
+                      width: Math.max(10, cellSize * 0.32),
+                      height: Math.max(10, cellSize * 0.32),
+                      background: "#f87171",
+                      border: "1px solid white",
+                    }}
                   >
-                    <X className="size-2.5 text-white" />
+                    <X style={{ width: "60%", height: "60%", color: "white" }} />
                   </button>
-                </>
-              ) : (
-                <Plus className="size-3 text-[#c9a84c60]" />
+                </div>
+              )}
+
+              {/* Empty zone dot */}
+              {inZone && !def && (
+                <div
+                  className="absolute rounded-full pointer-events-none"
+                  style={{
+                    width: Math.max(3, cellSize * 0.15),
+                    height: Math.max(3, cellSize * 0.15),
+                    background: "rgba(201,168,76,0.4)",
+                  }}
+                />
               )}
             </div>
           );
         })}
       </div>
 
-      <div className="text-center text-[9px] uppercase tracking-[0.3em] text-[#8b7d6b] mt-0.5">
-        ← Your Side (front row at top of grid)
+      {/* Zone label */}
+      <div
+        className="absolute right-1 pointer-events-none"
+        style={{
+          top: `${(WHITE_ZONE_MIN_ROW / GRID_SIZE) * 100}%`,
+          fontSize: Math.max(7, cellSize * 0.38),
+        }}
+      >
+        <span className="text-[#c9a84c] font-bold opacity-60 writing-mode-vertical">▶ YOUR ZONE</span>
       </div>
 
-      {selectedDef && (
-        <p className="text-center text-[10px] text-[#b8860b] italic mt-1">
-          Click an empty slot to place {selectedDef.name}
-        </p>
-      )}
+      {/* Corner decorations */}
+      {(["top-1 left-1 border-t-2 border-l-2","top-1 right-1 border-t-2 border-r-2",
+         "bottom-1 left-1 border-b-2 border-l-2","bottom-1 right-1 border-b-2 border-r-2"] as const)
+        .map((cls, i) => (
+          <div key={i} className={`absolute w-4 h-4 border-[#c9a84c] pointer-events-none rounded-sm ${cls}`} />
+        ))}
     </div>
   );
 }
@@ -169,20 +267,19 @@ export default function DecksPage() {
   const router = useRouter();
   const allDefs = getAllDefinitions();
 
-  const [decks, setDecks]           = useState<DeckConfig[]>([]);
+  const [decks, setDecks]             = useState<DeckConfig[]>([]);
   const [activeDeckId, setActiveDeckId] = useState<string | null>(null);
   const [editingDeck, setEditingDeck]   = useState<DeckConfig | null>(null);
   const [selectedDef, setSelectedDef]   = useState<PieceDefinition | null>(null);
   const [renamingId, setRenamingId]     = useState<string | null>(null);
   const [renameValue, setRenameValue]   = useState("");
 
-  // ── Load from localStorage ──────────────────────────────
+  // ── Load ──────────────────────────────────────────────────
   useEffect(() => {
     let loaded = loadDecks();
     if (loaded.length === 0) {
-      const d1 = makeDefaultDeck("Arcane Army");
-      const d2 = makeDefaultDeck("Shadow Legion");
-      loaded = [d1, d2];
+      const d = makeDefaultDeck("Arcane Army");
+      loaded = [d];
       saveDecks(loaded);
     }
     setDecks(loaded);
@@ -191,115 +288,121 @@ export default function DecksPage() {
     setEditingDeck(loaded.find(d => d.id === aid) ?? loaded[0] ?? null);
   }, []);
 
-  // ── Persist on change ───────────────────────────────────
-  const persistDecks = useCallback((next: DeckConfig[]) => {
+  // ── Persist ───────────────────────────────────────────────
+  const persist = useCallback((next: DeckConfig[]) => {
     setDecks(next);
     saveDecks(next);
   }, []);
 
-  // ── Slot click: place selected piece ───────────────────
-  const handleSlotClick = useCallback((slotIndex: number) => {
-    if (!editingDeck || !selectedDef) return;
-    const existing = editingDeck.slots.find(s => s.slotIndex === slotIndex);
-    if (existing) return; // already filled — use clear button
-    if (editingDeck.slots.length >= MAX_PIECES) return;
-
-    const newSlot: FormationSlot = { slotIndex, definitionId: selectedDef.typeId };
-    const updated: DeckConfig = { ...editingDeck, slots: [...editingDeck.slots, newSlot] };
-    setEditingDeck(updated);
-    const nextDecks = upsertDeck(decks, updated);
-    persistDecks(nextDecks);
-  }, [editingDeck, selectedDef, decks, persistDecks]);
-
-  // ── Slot clear ──────────────────────────────────────────
-  const handleSlotClear = useCallback((slotIndex: number) => {
+  // ── Tile click: place or remove ───────────────────────────
+  const handleTileClick = useCallback((coord: Coord) => {
     if (!editingDeck) return;
-    const updated: DeckConfig = {
-      ...editingDeck,
-      slots: editingDeck.slots.filter(s => s.slotIndex !== slotIndex),
-    };
-    setEditingDeck(updated);
-    persistDecks(upsertDeck(decks, updated));
-  }, [editingDeck, decks, persistDecks]);
 
-  // ── New deck ─────────────────────────────────────────────
+    const existing = editingDeck.slots.find(
+      s => s.coord.row === coord.row && s.coord.col === coord.col
+    );
+
+    let updated: DeckConfig;
+
+    if (existing) {
+      // Remove piece
+      updated = { ...editingDeck, slots: editingDeck.slots.filter(s => s !== existing) };
+    } else {
+      // Place piece
+      if (!selectedDef) return;
+      if (editingDeck.slots.length >= MAX_PIECES) return;
+      const newSlot: FormationSlot = { coord, definitionId: selectedDef.typeId };
+      updated = { ...editingDeck, slots: [...editingDeck.slots, newSlot] };
+    }
+
+    setEditingDeck(updated);
+    persist(upsertDeck(decks, updated));
+  }, [editingDeck, selectedDef, decks, persist]);
+
+  // ── Deck CRUD ─────────────────────────────────────────────
   const handleNewDeck = useCallback(() => {
     const d = createNewDeck(`Deck ${decks.length + 1}`);
     const next = [...decks, d];
-    persistDecks(next);
+    persist(next);
     setEditingDeck(d);
     setActiveDeckId(d.id);
     saveActiveDeckId(d.id);
-  }, [decks, persistDecks]);
+  }, [decks, persist]);
 
-  // ── Delete deck ──────────────────────────────────────────
   const handleDeleteDeck = useCallback((id: string) => {
     const next = deleteDeck(decks, id);
-    persistDecks(next);
+    persist(next);
     if (editingDeck?.id === id) {
       setEditingDeck(next[0] ?? null);
       setActiveDeckId(next[0]?.id ?? null);
     }
-  }, [decks, editingDeck, persistDecks]);
+  }, [decks, editingDeck, persist]);
 
-  // ── Select deck to edit ──────────────────────────────────
   const handleSelectDeck = useCallback((deck: DeckConfig) => {
     setEditingDeck(deck);
     setActiveDeckId(deck.id);
     saveActiveDeckId(deck.id);
   }, []);
 
-  // ── Rename ───────────────────────────────────────────────
-  const startRename = (deck: DeckConfig) => { setRenamingId(deck.id); setRenameValue(deck.name); };
-  const commitRename = () => {
-    if (!renamingId || !renameValue.trim()) { setRenamingId(null); return; }
-    const updated = decks.map(d => d.id === renamingId ? { ...d, name: renameValue.trim() } : d);
-    persistDecks(updated);
-    if (editingDeck?.id === renamingId) setEditingDeck(prev => prev ? { ...prev, name: renameValue.trim() } : prev);
-    setRenamingId(null);
-  };
-
-  // ── Clear entire deck ────────────────────────────────────
-  const handleClearDeck = () => {
+  const handleClearDeck = useCallback(() => {
     if (!editingDeck) return;
     const updated = { ...editingDeck, slots: [] };
     setEditingDeck(updated);
-    persistDecks(upsertDeck(decks, updated));
-  };
+    persist(upsertDeck(decks, updated));
+  }, [editingDeck, decks, persist]);
 
-  // ── Play ─────────────────────────────────────────────────
-  const handlePlay = () => {
-    if (activeDeckId) saveActiveDeckId(activeDeckId);
-    router.push("/play/local");
-  };
+  // ── Rename ────────────────────────────────────────────────
+  const commitRename = useCallback(() => {
+    if (!renamingId || !renameValue.trim()) { setRenamingId(null); return; }
+    const next = decks.map(d => d.id === renamingId ? { ...d, name: renameValue.trim() } : d);
+    persist(next);
+    if (editingDeck?.id === renamingId)
+      setEditingDeck(prev => prev ? { ...prev, name: renameValue.trim() } : prev);
+    setRenamingId(null);
+  }, [renamingId, renameValue, decks, editingDeck, persist]);
 
-  const count = editingDeck ? pieceCount(editingDeck) : 0;
-  const canPlay = count === MAX_PIECES;
+  // ── Derived ───────────────────────────────────────────────
+  const count = editingDeck?.slots.length ?? 0;
+  const canPlay = count >= 1; // at least 1 piece to start
 
-  // ── Render ───────────────────────────────────────────────
+  // How many of each type in current deck
+  const defCountMap = new Map<string, number>();
+  for (const s of editingDeck?.slots ?? []) {
+    defCountMap.set(s.definitionId, (defCountMap.get(s.definitionId) ?? 0) + 1);
+  }
+
+  // ── Render ────────────────────────────────────────────────
   return (
     <div
       className="min-h-screen w-full flex flex-col"
-      style={{ background: "radial-gradient(ellipse at top, #fff4c2 0%, #f5f0e8 45%, #ece4d3 100%)" }}
+      style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 45%,#ece4d3 100%)" }}
     >
       {/* Header */}
       <header
         className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[#c9a84c30] shrink-0"
         style={{ background: "rgba(253,251,247,0.85)", backdropFilter: "blur(8px)" }}
       >
-        <button onClick={() => router.push("/")} className="flex items-center gap-2 text-[#8b7d6b] hover:text-[#1e3a6e] transition-colors cursor-pointer">
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-2 text-[#8b7d6b] hover:text-[#1e3a6e] transition-colors cursor-pointer"
+        >
           <ChevronLeft className="size-4" />
           <span className="text-xs uppercase tracking-widest font-medium">Back</span>
         </button>
+
         <div className="flex items-center gap-2">
           <Crown className="size-4 text-[#b8860b]" />
           <span className="font-serif font-bold text-base text-[#1e3a6e] tracking-wider">Deck Builder</span>
         </div>
+
         <button
-          onClick={handlePlay}
+          onClick={() => { if (activeDeckId) saveActiveDeckId(activeDeckId); router.push("/play/local"); }}
           disabled={!canPlay}
           className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:opacity-90"
-          style={{ background: "linear-gradient(135deg, #c9a84c 0%, #b8860b 100%)", boxShadow: canPlay ? "0 4px 12px rgba(184,134,11,0.3)" : "none" }}
+          style={{
+            background: "linear-gradient(135deg,#c9a84c 0%,#b8860b 100%)",
+            boxShadow: canPlay ? "0 4px 12px rgba(184,134,11,0.3)" : "none",
+          }}
         >
           <Play className="size-3 fill-current" />
           {canPlay ? "Play" : `${count}/${MAX_PIECES}`}
@@ -309,14 +412,17 @@ export default function DecksPage() {
       {/* Body */}
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* ── Left: Deck List ──────────────────────────── */}
+        {/* ── Left: Deck List ─────────────────────────────── */}
         <aside
-          className="flex flex-col gap-3 w-44 sm:w-52 shrink-0 p-3 border-r border-[#c9a84c30] overflow-y-auto"
+          className="flex flex-col gap-3 w-40 sm:w-48 shrink-0 p-3 border-r border-[#c9a84c30] overflow-y-auto"
           style={{ background: "rgba(253,251,247,0.7)" }}
         >
           <div className="flex items-center justify-between">
             <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">My Decks</span>
-            <button onClick={handleNewDeck} className="text-[#b8860b] hover:text-[#1e3a6e] transition-colors cursor-pointer">
+            <button
+              onClick={handleNewDeck}
+              className="text-[#b8860b] hover:text-[#1e3a6e] transition-colors cursor-pointer"
+            >
               <Plus className="size-4" />
             </button>
           </div>
@@ -341,7 +447,10 @@ export default function DecksPage() {
                       value={renameValue}
                       onChange={e => setRenameValue(e.target.value)}
                       onBlur={commitRename}
-                      onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") commitRename();
+                        if (e.key === "Escape") setRenamingId(null);
+                      }}
                       className="flex-1 bg-transparent text-xs text-[#1e3a6e] font-serif outline-none border-b border-[#c9a84c] min-w-0"
                       onClick={e => e.stopPropagation()}
                     />
@@ -350,11 +459,17 @@ export default function DecksPage() {
                   )}
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button onClick={e => { e.stopPropagation(); startRename(deck); }} className="text-[#8b7d6b] hover:text-[#1e3a6e] cursor-pointer">
+                    <button
+                      onClick={e => { e.stopPropagation(); setRenamingId(deck.id); setRenameValue(deck.name); }}
+                      className="text-[#8b7d6b] hover:text-[#1e3a6e] cursor-pointer"
+                    >
                       <Edit2 className="size-3" />
                     </button>
                     {decks.length > 1 && (
-                      <button onClick={e => { e.stopPropagation(); handleDeleteDeck(deck.id); }} className="text-[#f87171] hover:text-red-600 cursor-pointer">
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDeleteDeck(deck.id); }}
+                        className="text-[#f87171] hover:text-red-600 cursor-pointer"
+                      >
                         <Trash2 className="size-3" />
                       </button>
                     )}
@@ -367,72 +482,117 @@ export default function DecksPage() {
           </div>
         </aside>
 
-        {/* ── Centre: Formation Grid ───────────────────── */}
-        <main className="flex-1 flex flex-col gap-4 p-4 sm:p-5 overflow-y-auto min-w-0">
-          {editingDeck ? (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-serif font-bold text-base text-[#1e3a6e]">{editingDeck.name}</h2>
-                  <p className="text-[10px] text-[#8b7d6b] mt-0.5">
-                    Drag a piece type from the right → click a slot to place it
-                  </p>
-                </div>
-                <button
-                  onClick={handleClearDeck}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#f8711340] text-[#f87171] text-xs hover:bg-[#f8711310] transition-colors cursor-pointer"
-                >
-                  <Trash2 className="size-3" />
-                  Clear
-                </button>
-              </div>
+        {/* ── Centre: Board Preview ────────────────────────── */}
+        <main className="flex-1 flex flex-col gap-3 p-3 sm:p-4 overflow-y-auto min-w-0">
 
-              <FormationGrid
-                deck={editingDeck}
-                selectedDef={selectedDef}
-                onSlotClick={handleSlotClick}
-                onSlotClear={handleSlotClear}
-              />
-
-              {/* Mobile: compact piece selector below grid */}
-              <div className="lg:hidden flex flex-col gap-2 mt-2">
-                <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">Select Piece</span>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {allDefs.map(def => (
-                    <PieceCard
-                      key={def.typeId}
-                      def={def}
-                      selected={selectedDef?.typeId === def.typeId}
-                      onClick={() => setSelectedDef(prev => prev?.typeId === def.typeId ? null : def)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-sm text-[#8b7d6b] italic font-serif">Select or create a deck</p>
+          {/* Info bar */}
+          <div className="flex items-center justify-between shrink-0">
+            <div>
+              <h2 className="font-serif font-bold text-sm text-[#1e3a6e]">
+                {editingDeck?.name ?? "—"}
+              </h2>
+              <p className="text-[10px] text-[#8b7d6b] mt-0.5">
+                {selectedDef
+                  ? `Placing: ${selectedDef.name} — click a highlighted tile`
+                  : "Select a piece from the right → click your zone (rows 11–15)"}
+              </p>
             </div>
-          )}
+
+            <div className="flex items-center gap-2">
+              {/* Piece count badge */}
+              <span
+                className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                style={{
+                  background: count >= MAX_PIECES ? "rgba(74,222,128,0.15)" : "rgba(201,168,76,0.12)",
+                  color: count >= MAX_PIECES ? "#4ade80" : "#b8860b",
+                  border: `1px solid ${count >= MAX_PIECES ? "rgba(74,222,128,0.4)" : "#c9a84c40"}`,
+                }}
+              >
+                {count}/{MAX_PIECES}
+              </span>
+
+              <button
+                onClick={handleClearDeck}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#f8711340] text-[#f87171] text-xs hover:bg-[#f8711310] transition-colors cursor-pointer"
+              >
+                <Trash2 className="size-3" />
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Board */}
+          <div className="flex-1 flex items-center justify-center min-h-0">
+            <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg xl:max-w-xl">
+              {editingDeck ? (
+                <BoardPreview
+                  slots={editingDeck.slots}
+                  selectedDef={selectedDef}
+                  onTileClick={handleTileClick}
+                />
+              ) : (
+                <div className="aspect-square flex items-center justify-center rounded-xl border border-dashed border-[#c9a84c40]">
+                  <p className="text-sm text-[#8b7d6b] italic font-serif">Select or create a deck</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 shrink-0 flex-wrap">
+            {[
+              { color: "rgba(74,222,128,0.15)", border: "rgba(74,222,128,0.4)", label: "Your zone (rows 11–15)" },
+              { color: "rgba(201,168,76,0.2)",  border: "#c9a84c60",            label: "Piece placed" },
+              { color: "transparent",           border: "#2c2c2c30",            label: "Outside zone" },
+            ].map(({ color, border, label }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <div
+                  className="w-4 h-4 rounded-sm border"
+                  style={{ background: color, borderColor: border }}
+                />
+                <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Mobile: piece picker below board */}
+          <div className="lg:hidden flex flex-col gap-2 mt-1">
+            <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">Select Piece</span>
+            <div className="grid grid-cols-2 gap-1.5">
+              {allDefs.map(def => (
+                <PieceCard
+                  key={def.typeId}
+                  def={def}
+                  selected={selectedDef?.typeId === def.typeId}
+                  count={defCountMap.get(def.typeId) ?? 0}
+                  onClick={() => setSelectedDef(prev =>
+                    prev?.typeId === def.typeId ? null : def
+                  )}
+                />
+              ))}
+            </div>
+          </div>
         </main>
 
-        {/* ── Right: Piece Roster ──────────────────────── */}
+        {/* ── Right: Piece Roster ──────────────────────────── */}
         <aside
-          className="hidden lg:flex flex-col gap-3 w-64 xl:w-72 shrink-0 p-4 border-l border-[#c9a84c30] overflow-y-auto"
+          className="hidden lg:flex flex-col gap-3 w-60 xl:w-68 shrink-0 p-3 border-l border-[#c9a84c30] overflow-y-auto"
           style={{ background: "rgba(253,251,247,0.7)" }}
         >
           <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">
             Piece Roster · click to select
           </span>
 
-          {/* Filter by faction */}
           <div className="flex flex-col gap-1.5">
             {allDefs.map(def => (
               <PieceCard
                 key={def.typeId}
                 def={def}
                 selected={selectedDef?.typeId === def.typeId}
-                onClick={() => setSelectedDef(prev => prev?.typeId === def.typeId ? null : def)}
+                count={defCountMap.get(def.typeId) ?? 0}
+                onClick={() => setSelectedDef(prev =>
+                  prev?.typeId === def.typeId ? null : def
+                )}
               />
             ))}
           </div>
@@ -440,25 +600,42 @@ export default function DecksPage() {
           {/* Selected piece detail */}
           {selectedDef && (
             <div
-              className="mt-2 rounded-lg border px-3 py-3 flex flex-col gap-2"
+              className="rounded-lg border px-3 py-3 flex flex-col gap-2 mt-1"
               style={{ background: "rgba(201,168,76,0.06)", borderColor: "#c9a84c40" }}
             >
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{selectedDef.symbol}</span>
+                <span className="text-2xl leading-none">{selectedDef.symbol}</span>
                 <div>
                   <p className="font-serif font-bold text-sm text-[#1e3a6e]">{selectedDef.name}</p>
-                  <p className="text-[9px] uppercase tracking-wider" style={{ color: FACTION_COLOR[selectedDef.faction] }}>
+                  <p
+                    className="text-[9px] uppercase tracking-wider"
+                    style={{ color: FACTION_COLOR[selectedDef.faction] }}
+                  >
                     {selectedDef.faction}
                   </p>
                 </div>
               </div>
               <p className="text-[10px] text-[#8b7d6b] leading-relaxed">{selectedDef.description}</p>
+              <div className="flex items-center gap-3 text-[10px]">
+                <span className="flex items-center gap-1 text-[#4ade80]">
+                  <Heart className="size-3" />{selectedDef.maxHp > 0 ? selectedDef.maxHp : "∞"}
+                </span>
+                <span className="flex items-center gap-1 text-[#f97316]">
+                  <Swords className="size-3" />{selectedDef.attack}
+                </span>
+                <span className="flex items-center gap-1 text-[#60a5fa]">
+                  <Shield className="size-3" />{selectedDef.defense}
+                </span>
+              </div>
               {selectedDef.abilities.map(ab => (
-                <div key={ab.id} className="flex flex-col gap-0.5">
+                <div key={ab.id} className="flex flex-col gap-0.5 border-t border-[#c9a84c20] pt-2">
                   <span className="text-[10px] font-semibold text-[#1e3a6e]">{ab.name}</span>
                   <span className="text-[9px] text-[#8b7d6b]">{ab.description}</span>
                 </div>
               ))}
+              <p className="text-[9px] text-[#b8860b] italic mt-1">
+                Click any highlighted tile on the board to place
+              </p>
             </div>
           )}
         </aside>
