@@ -3,6 +3,7 @@
 // ============================================================
 import type { DeckConfig, FormationSlot, Coord } from "../types/game";
 import { isInsideOctagon } from "./boardUtils";
+import { getAllDefinitions } from "./pieceRegistry";
 
 const DECKS_KEY  = "soulchess_decks";
 const ACTIVE_KEY = "soulchess_active_deck";
@@ -102,6 +103,43 @@ export function makeDefaultDeck(name: string): DeckConfig {
   const slots: FormationSlot[] = placements.map(p => ({
     coord: { row: p.row, col: p.col },
     definitionId: p.id,
+  }));
+
+  return { id: crypto.randomUUID(), name, slots };
+}
+
+// ─── Random AI deck ──────────────────────────────────────────
+// Generates a fully random deck for the AI:
+//   - Must include exactly 1 soul_king
+//   - Remaining 19 slots filled with random pieces from the registry
+//   - Placed randomly across the deploy zone (rows 11–15)
+export function makeRandomDeck(name: string): DeckConfig {
+  const allDefs  = getAllDefinitions();
+  const nonKings = allDefs.filter(d => d.typeId !== "soul_king");
+
+  // Build pool of 19 random piece type IDs
+  const pool: string[] = [];
+  while (pool.length < 19) {
+    const def = nonKings[Math.floor(Math.random() * nonKings.length)];
+    pool.push(def.typeId);
+  }
+  const pieceIds = ["soul_king", ...pool];
+
+  // Collect all valid deploy zone tiles (rows 11–15 inside octagon)
+  const validCoords: Array<{ row: number; col: number }> = [];
+  for (let r = WHITE_ZONE_MIN_ROW; r <= WHITE_ZONE_MAX_ROW; r++) {
+    for (let c = 0; c < 16; c++) {
+      if (isInsideOctagon(r, c)) validCoords.push({ row: r, col: c });
+    }
+  }
+
+  // Shuffle valid coords
+  const shuffled = [...validCoords].sort(() => Math.random() - 0.5);
+
+  // Assign each piece to a unique coord
+  const slots: FormationSlot[] = pieceIds.slice(0, shuffled.length).map((id, i) => ({
+    coord: { row: shuffled[i].row, col: shuffled[i].col },
+    definitionId: id,
   }));
 
   return { id: crypto.randomUUID(), name, slots };
