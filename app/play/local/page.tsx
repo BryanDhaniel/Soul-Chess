@@ -388,7 +388,7 @@ function BattleView({
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col relative"
+      className="h-screen w-full flex flex-col relative overflow-hidden"
       style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 45%,#ece4d3 100%)" }}
     >
       {/* Win overlay */}
@@ -442,9 +442,18 @@ function BattleView({
       {/* Body */}
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* Board */}
-        <div className="flex-1 flex items-center justify-center p-3 sm:p-5 min-w-0">
-          <div className="w-full max-w-xl lg:max-w-2xl">
+        {/* Board — centred, square, fits viewport height without scrolling */}
+        <div className="flex-1 flex items-center justify-center p-3 min-w-0 min-h-0 overflow-hidden">
+          <div
+            style={{
+              /* Square: limited by whichever is smaller — remaining width or height */
+              width:  "min(100%, calc(100vh - 120px))",
+              height: "min(100%, calc(100vh - 120px))",
+              maxWidth: 560,
+              maxHeight: 560,
+              aspectRatio: "1/1",
+            }}
+          >
             <Board state={state} onTileClick={handleTileClick} />
           </div>
         </div>

@@ -118,7 +118,12 @@ export function Board({ state, onTileClick }: BoardProps) {
   useEffect(() => {
     const update = () => {
       if (containerRef.current) {
-        setCellSize(Math.floor(containerRef.current.offsetWidth / GRID));
+        // Use the smaller dimension so board never overflows in either axis
+        const size = Math.min(
+          containerRef.current.offsetWidth,
+          containerRef.current.offsetHeight,
+        );
+        setCellSize(Math.floor(size / GRID));
       }
     };
     update();
@@ -136,8 +141,10 @@ export function Board({ state, onTileClick }: BoardProps) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden"
+      className="relative overflow-hidden"
       style={{
+        width: "100%",
+        height: "100%",
         aspectRatio: "1/1",
         background: "linear-gradient(135deg,#e4dcce 0%,#c3b9a5 100%)",
         border: "2px solid #2c2c2c",
