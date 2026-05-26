@@ -15,6 +15,31 @@ export const WHITE_ZONE_MIN_ROW = 11;
 export const WHITE_ZONE_MAX_ROW = 15;
 export const MAX_PIECES = 20;
 
+// Pieces that must appear exactly once in every deck
+export const REQUIRED_PIECES: Record<string, { label: string; max: number }> = {
+  soul_king:       { label: "Soul King",       max: 1 },
+  soulbound_queen: { label: "Soulbound Queen", max: 1 },
+};
+
+export function isDeckValid(slots: FormationSlot[]): boolean {
+  for (const [typeId, rule] of Object.entries(REQUIRED_PIECES)) {
+    const count = slots.filter(s => s.definitionId === typeId).length;
+    if (count !== rule.max) return false;
+  }
+  return slots.length === MAX_PIECES;
+}
+
+export function getDeckErrors(slots: FormationSlot[]): string[] {
+  const errors: string[] = [];
+  for (const [typeId, rule] of Object.entries(REQUIRED_PIECES)) {
+    const count = slots.filter(s => s.definitionId === typeId).length;
+    if (count === 0) errors.push(`Missing ${rule.label} (required ×1)`);
+    if (count > rule.max) errors.push(`Too many ${rule.label} (max ×${rule.max})`);
+  }
+  if (slots.length < MAX_PIECES) errors.push(`Need ${MAX_PIECES - slots.length} more piece${MAX_PIECES - slots.length > 1 ? "s" : ""}`);
+  return errors;
+}
+
 export function isInDeployZone(coord: Coord): boolean {
   return (
     coord.row >= WHITE_ZONE_MIN_ROW &&
@@ -110,20 +135,22 @@ export function makeDefaultDeck(name: string): DeckConfig {
 
 // ─── Random AI deck ──────────────────────────────────────────
 // Generates a fully random deck for the AI:
-//   - Must include exactly 1 soul_king
-//   - Remaining 19 slots filled with random pieces from the registry
+//   - Exactly 1 soul_king + 1 soulbound_queen (required)
+//   - Remaining 18 slots filled with random pieces from the registry
 //   - Placed randomly across the deploy zone (rows 11–15)
 export function makeRandomDeck(name: string): DeckConfig {
-  const allDefs  = getAllDefinitions();
-  const nonKings = allDefs.filter(d => d.typeId !== "soul_king");
+  const allDefs = getAllDefinitions();
+  const freePool = allDefs.filter(
+    d => !Object.keys(REQUIRED_PIECES).includes(d.typeId)
+  );
 
-  // Build pool of 19 random piece type IDs
+  // Build pool of 18 random piece type IDs
   const pool: string[] = [];
-  while (pool.length < 19) {
-    const def = nonKings[Math.floor(Math.random() * nonKings.length)];
+  while (pool.length < 18) {
+    const def = freePool[Math.floor(Math.random() * freePool.length)];
     pool.push(def.typeId);
   }
-  const pieceIds = ["soul_king", ...pool];
+  const pieceIds = [...Object.keys(REQUIRED_PIECES), ...pool];
 
   // Collect all valid deploy zone tiles (rows 11–15 inside octagon)
   const validCoords: Array<{ row: number; col: number }> = [];

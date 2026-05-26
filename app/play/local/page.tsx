@@ -306,17 +306,17 @@ function WinOverlay({
 }
 
 // ─── Deck loader ──────────────────────────────────────────────
+// Returns the single deck the player has selected (active deck).
+// AI always gets a random deck generated at mode-select time.
 function useDecks() {
-  const [decks, setDecks] = useState<{ white: DeckConfig; black: DeckConfig } | null>(null);
+  const [playerDeck, setPlayerDeck] = useState<DeckConfig | null>(null);
   useEffect(() => {
-    const all  = loadDecks();
-    const aid  = loadActiveDeckId();
-    const fb   = makeDefaultDeck("Default");
-    const white = all.find(d => d.id === aid) ?? all[0] ?? fb;
-    const black = all[1] ?? all[0] ?? fb;
-    setDecks({ white, black });
+    const all = loadDecks();
+    const aid = loadActiveDeckId();
+    const fb  = makeDefaultDeck("Default");
+    setPlayerDeck(all.find(d => d.id === aid) ?? all[0] ?? fb);
   }, []);
-  return decks;
+  return playerDeck;
 }
 
 // ─── Battle view ──────────────────────────────────────────────
@@ -454,7 +454,7 @@ function BattleView({
               aspectRatio: "1/1",
             }}
           >
-            <Board state={state} onTileClick={handleTileClick} />
+            <Board state={state} onTileClick={handleTileClick} flipped={humanPlayer === "black"} />
           </div>
         </div>
 
@@ -542,13 +542,13 @@ function BattleView({
 
 // ─── Page entry ───────────────────────────────────────────────
 export default function PlayLocalPage() {
-  const decks = useDecks();
+  const playerDeck = useDecks();
   const [mode, setMode] = useState<GameMode | null>(null);
   const [rematchKey, setRematchKey] = useState(0);
   // AI always gets a freshly generated random deck each game
   const [aiDeck, setAiDeck] = useState<DeckConfig | null>(null);
 
-  if (!decks) {
+  if (!playerDeck) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f5f0e8" }}>
         <span className="font-serif text-[#8b7d6b] animate-pulse">Loading…</span>
@@ -561,20 +561,20 @@ export default function PlayLocalPage() {
       <ModeSelect
         onSelect={(selectedMode) => {
           setMode(selectedMode);
-          // Generate fresh random deck for AI (or null for PvP)
           setAiDeck(
             selectedMode !== "pvp"
               ? makeRandomDeck("AI Deck")
-              : decks.white // PvP: aiDeck unused, just needs to be non-null
+              : playerDeck // PvP: both sides use playerDeck (same deck)
           );
         }}
       />
     );
   }
 
-  // Assign decks: human always uses their saved deck, AI gets random
-  const whiteDeck = mode === "ai-white" ? aiDeck : decks.white;
-  const blackDeck = mode === "ai-black" ? aiDeck : decks.black;
+  // Human always plays with their chosen deck regardless of side.
+  // AI always gets the random deck.
+  const whiteDeck = mode === "ai-white" ? aiDeck  : playerDeck;
+  const blackDeck = mode === "ai-black" ? aiDeck  : playerDeck;
 
   return (
     <BattleView

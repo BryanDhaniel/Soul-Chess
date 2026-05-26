@@ -1,11 +1,6 @@
 // ============================================================
 // SOULCHESS — /decks  Deck Builder
 // ============================================================
-// Layout:
-//   Left sidebar  — deck list (create / rename / delete / set active)
-//   Centre        — octagon board preview; click deploy zone to place
-//   Right sidebar — piece roster (click to select, shows detail)
-// ============================================================
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -19,47 +14,76 @@ import {
   loadDecks, saveDecks, loadActiveDeckId, saveActiveDeckId,
   createNewDeck, upsertDeck, deleteDeck, makeDefaultDeck,
   isInDeployZone, WHITE_ZONE_MIN_ROW, WHITE_ZONE_MAX_ROW, MAX_PIECES,
+  REQUIRED_PIECES, isDeckValid, getDeckErrors,
 } from "../lib/deckStorage";
-import {
-  isInsideOctagon, createBoard, coordKey, GRID_SIZE,
-} from "../lib/boardUtils";
+import { isInsideOctagon, coordKey, GRID_SIZE } from "../lib/boardUtils";
 
-// ─── Constants ───────────────────────────────────────────────
+// ─── Visual constants ─────────────────────────────────────────
 const FACTION_COLOR: Record<string, string> = {
   Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0", Fire: "#e05c2a",
 };
-const TIER_COLOR: Record<number, string> = { 1: "#8b7d6b", 2: "#3b82f6", 3: "#b8860b" };
+const TIER_COLOR: Record<number, string> = {
+  1: "#8b7d6b", 2: "#3b82f6", 3: "#b8860b",
+};
 
-// Pre-build a flat tile list for the board preview (created once)
-const BOARD_TILES = createBoard().flat().filter(t => t.isInside);
-
-// ─── Piece Card (roster) ─────────────────────────────────────
+// ─── Piece Card ───────────────────────────────────────────────
 function PieceCard({
   def, selected, count, onClick,
 }: {
   def: PieceDefinition;
   selected: boolean;
-  count: number;         // how many in current deck
+  count: number;
   onClick: () => void;
 }) {
-  const fc = FACTION_COLOR[def.faction] ?? "#c9a84c";
+  const fc      = FACTION_COLOR[def.faction] ?? "#c9a84c";
+  const rule    = REQUIRED_PIECES[def.typeId];
+  const isMaxed = rule ? count >= rule.max : false;
+
   return (
     <button
-      onClick={onClick}
-      className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg border text-left transition-all hover:scale-[1.01] cursor-pointer"
+      onClick={isMaxed ? undefined : onClick}
+      className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg border text-left transition-all hover:scale-[1.01]"
       style={{
-        background: selected ? `${fc}18` : "rgba(253,251,247,0.6)",
-        borderColor: selected ? fc : "#c9a84c25",
-        boxShadow: selected ? `0 0 0 1.5px ${fc}` : "none",
+        background: isMaxed
+          ? "rgba(74,222,128,0.07)"
+          : selected
+            ? `${fc}18`
+            : "rgba(253,251,247,0.6)",
+        borderColor: isMaxed
+          ? "rgba(74,222,128,0.4)"
+          : selected
+            ? fc
+            : "#c9a84c25",
+        boxShadow: selected && !isMaxed ? `0 0 0 1.5px ${fc}` : "none",
+        cursor: isMaxed ? "default" : "pointer",
+        opacity: isMaxed ? 0.75 : 1,
       }}
     >
       <span className="text-lg leading-none shrink-0">{def.symbol}</span>
       <div className="flex flex-col flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
-          <span className="font-serif font-semibold text-xs text-[#1e3a6e] truncate">{def.name}</span>
-          <span className="text-[8px] uppercase tracking-wider shrink-0" style={{ color: TIER_COLOR[def.tier] }}>
-            T{def.tier}
+          <span className="font-serif font-semibold text-xs text-[#1e3a6e] truncate">
+            {def.name}
           </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {rule && (
+              <span
+                className="text-[7px] uppercase tracking-wider px-1 py-0.5 rounded font-bold"
+                style={{
+                  background: isMaxed ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.15)",
+                  color: isMaxed ? "#4ade80" : "#f87171",
+                }}
+              >
+                {isMaxed ? "✓ Set" : "Required"}
+              </span>
+            )}
+            <span
+              className="text-[8px] uppercase tracking-wider"
+              style={{ color: TIER_COLOR[def.tier] }}
+            >
+              T{def.tier}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[9px] text-[#8b7d6b] flex items-center gap-0.5">
@@ -85,11 +109,9 @@ function PieceCard({
   );
 }
 
-// ─── Board preview ───────────────────────────────────────────
+// ─── Board Preview ────────────────────────────────────────────
 function BoardPreview({
-  slots,
-  selectedDef,
-  onTileClick,
+  slots, selectedDef, onTileClick,
 }: {
   slots: FormationSlot[];
   selectedDef: PieceDefinition | null;
@@ -109,8 +131,6 @@ function BoardPreview({
     return () => ro.disconnect();
   }, []);
 
-  // Build lookup: coordKey → definitionId
-  // Filter out any stale slots that lack a valid coord (old format used slotIndex)
   const slotMap = new Map(
     slots
       .filter(s => s.coord != null && typeof s.coord.row === "number")
@@ -145,62 +165,48 @@ function BoardPreview({
           }
 
           const coord: Coord = { row, col };
-          const key = coordKey(coord);
-          const inZone = isInDeployZone(coord);
-          const defId  = slotMap.get(key);
-          const def    = defId ? getPieceDefinitionById(defId) : null;
-          const fc     = def ? (FACTION_COLOR[def.faction] ?? "#c9a84c") : null;
+          const key     = coordKey(coord);
+          const inZone  = isInDeployZone(coord);
+          const defId   = slotMap.get(key);
+          const def     = defId ? getPieceDefinitionById(defId) : null;
+          const fc      = def ? (FACTION_COLOR[def.faction] ?? "#c9a84c") : null;
           const isLight = (row + col) % 2 === 0;
-
-          // Colour logic
-          const bg = isLight ? "#f8f4ec" : "#2c2c2c";
-          let overlay: React.CSSProperties | null = null;
-          let cursor = "default";
-
-          if (inZone) {
-            // Deploy zone tint
-            overlay = {
-              position: "absolute", inset: 0,
-              background: def
-                ? `${fc}20`
-                : selectedDef
-                  ? "rgba(201,168,76,0.08)"
-                  : "rgba(74,222,128,0.06)",
-              pointerEvents: "none",
-            };
-            cursor = "pointer";
-          }
+          const baseBg  = isLight ? "#f8f4ec" : "#2c2c2c";
 
           return (
             <div
               key={i}
               className="relative w-full h-full flex items-center justify-center transition-all duration-100"
               style={{
-                background: bg,
-                cursor,
-                boxShadow: inZone && selectedDef && !def
-                  ? "inset 0 0 0 1px rgba(201,168,76,0.35)"
-                  : "none",
+                background: baseBg,
+                cursor: inZone ? "pointer" : "default",
+                boxShadow:
+                  inZone && selectedDef && !def
+                    ? "inset 0 0 0 1px rgba(201,168,76,0.35)"
+                    : "none",
               }}
               onClick={() => inZone && onTileClick(coord)}
             >
               {/* Zone tint */}
-              {inZone && <div style={overlay ?? {}} />}
-
-              {/* Zone border highlight on hover */}
-              {inZone && !def && selectedDef && (
+              {inZone && (
                 <div
-                  className="absolute inset-0 pointer-events-none opacity-0 hover:opacity-100 transition-opacity"
-                  style={{ background: "rgba(201,168,76,0.18)" }}
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background: def
+                      ? `${fc}20`
+                      : selectedDef
+                        ? "rgba(201,168,76,0.08)"
+                        : "rgba(74,222,128,0.06)",
+                  }}
                 />
               )}
 
-              {/* Placed piece */}
+              {/* Placed piece token */}
               {def && (
                 <div
                   className="relative flex items-center justify-center rounded-full z-10"
                   style={{
-                    width: Math.max(12, cellSize * 0.7),
+                    width:  Math.max(12, cellSize * 0.7),
                     height: Math.max(12, cellSize * 0.7),
                     fontSize: Math.max(7, cellSize * 0.42),
                     background: "linear-gradient(135deg,#fdfbf7 0%,#e8e0d0 100%)",
@@ -208,13 +214,15 @@ function BoardPreview({
                     boxShadow: `0 0 0 1px ${fc}60`,
                   }}
                 >
-                  <span style={{ lineHeight: 1, display: "block", marginTop: 1 }}>{def.symbol}</span>
+                  <span style={{ lineHeight: 1, display: "block", marginTop: 1 }}>
+                    {def.symbol}
+                  </span>
                   {/* Remove button */}
                   <button
                     onClick={e => { e.stopPropagation(); onTileClick(coord); }}
                     className="absolute -top-1 -right-1 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer z-20"
                     style={{
-                      width: Math.max(10, cellSize * 0.32),
+                      width:  Math.max(10, cellSize * 0.32),
                       height: Math.max(10, cellSize * 0.32),
                       background: "#f87171",
                       border: "1px solid white",
@@ -230,7 +238,7 @@ function BoardPreview({
                 <div
                   className="absolute rounded-full pointer-events-none"
                   style={{
-                    width: Math.max(3, cellSize * 0.15),
+                    width:  Math.max(3, cellSize * 0.15),
                     height: Math.max(3, cellSize * 0.15),
                     background: "rgba(201,168,76,0.4)",
                   }}
@@ -243,18 +251,15 @@ function BoardPreview({
 
       {/* Zone label */}
       <div
-        className="absolute right-1 pointer-events-none"
-        style={{
-          top: `${(WHITE_ZONE_MIN_ROW / GRID_SIZE) * 100}%`,
-          fontSize: Math.max(7, cellSize * 0.38),
-        }}
+        className="absolute right-1 pointer-events-none flex items-center"
+        style={{ top: `${(WHITE_ZONE_MIN_ROW / GRID_SIZE) * 100}%`, fontSize: Math.max(7, cellSize * 0.35) }}
       >
-        <span className="text-[#c9a84c] font-bold opacity-60 writing-mode-vertical">▶ YOUR ZONE</span>
+        <span className="text-[#c9a84c] font-bold opacity-60">▶</span>
       </div>
 
       {/* Corner decorations */}
-      {(["top-1 left-1 border-t-2 border-l-2","top-1 right-1 border-t-2 border-r-2",
-         "bottom-1 left-1 border-b-2 border-l-2","bottom-1 right-1 border-b-2 border-r-2"] as const)
+      {(["top-1 left-1 border-t-2 border-l-2", "top-1 right-1 border-t-2 border-r-2",
+         "bottom-1 left-1 border-b-2 border-l-2", "bottom-1 right-1 border-b-2 border-r-2"] as const)
         .map((cls, i) => (
           <div key={i} className={`absolute w-4 h-4 border-[#c9a84c] pointer-events-none rounded-sm ${cls}`} />
         ))}
@@ -262,19 +267,18 @@ function BoardPreview({
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────
 export default function DecksPage() {
-  const router = useRouter();
+  const router  = useRouter();
   const allDefs = getAllDefinitions();
 
-  const [decks, setDecks]             = useState<DeckConfig[]>([]);
-  const [activeDeckId, setActiveDeckId] = useState<string | null>(null);
+  const [decks, setDecks]               = useState<DeckConfig[]>([]);
   const [editingDeck, setEditingDeck]   = useState<DeckConfig | null>(null);
   const [selectedDef, setSelectedDef]   = useState<PieceDefinition | null>(null);
   const [renamingId, setRenamingId]     = useState<string | null>(null);
   const [renameValue, setRenameValue]   = useState("");
 
-  // ── Load ──────────────────────────────────────────────────
+  // ── Load ─────────────────────────────────────────────────
   useEffect(() => {
     let loaded = loadDecks();
     if (loaded.length === 0) {
@@ -284,7 +288,6 @@ export default function DecksPage() {
     }
     setDecks(loaded);
     const aid = loadActiveDeckId() ?? loaded[0]?.id ?? null;
-    setActiveDeckId(aid);
     setEditingDeck(loaded.find(d => d.id === aid) ?? loaded[0] ?? null);
   }, []);
 
@@ -305,12 +308,18 @@ export default function DecksPage() {
     let updated: DeckConfig;
 
     if (existing) {
-      // Remove piece
+      // Remove
       updated = { ...editingDeck, slots: editingDeck.slots.filter(s => s !== existing) };
     } else {
-      // Place piece
+      // Place
       if (!selectedDef) return;
       if (editingDeck.slots.length >= MAX_PIECES) return;
+      // Enforce max-1 for required pieces
+      const rule = REQUIRED_PIECES[selectedDef.typeId];
+      if (rule) {
+        const already = editingDeck.slots.filter(s => s.definitionId === selectedDef.typeId).length;
+        if (already >= rule.max) return;
+      }
       const newSlot: FormationSlot = { coord, definitionId: selectedDef.typeId };
       updated = { ...editingDeck, slots: [...editingDeck.slots, newSlot] };
     }
@@ -325,7 +334,6 @@ export default function DecksPage() {
     const next = [...decks, d];
     persist(next);
     setEditingDeck(d);
-    setActiveDeckId(d.id);
     saveActiveDeckId(d.id);
   }, [decks, persist]);
 
@@ -334,13 +342,11 @@ export default function DecksPage() {
     persist(next);
     if (editingDeck?.id === id) {
       setEditingDeck(next[0] ?? null);
-      setActiveDeckId(next[0]?.id ?? null);
     }
   }, [decks, editingDeck, persist]);
 
   const handleSelectDeck = useCallback((deck: DeckConfig) => {
     setEditingDeck(deck);
-    setActiveDeckId(deck.id);
     saveActiveDeckId(deck.id);
   }, []);
 
@@ -362,14 +368,21 @@ export default function DecksPage() {
   }, [renamingId, renameValue, decks, editingDeck, persist]);
 
   // ── Derived ───────────────────────────────────────────────
-  const count = editingDeck?.slots.length ?? 0;
-  const canPlay = count >= 1; // at least 1 piece to start
+  const slots      = editingDeck?.slots ?? [];
+  const count      = slots.length;
+  const canPlay    = editingDeck ? isDeckValid(slots) : false;
+  const deckErrors = editingDeck ? getDeckErrors(slots) : [];
 
-  // How many of each type in current deck
+  // Count per definition in current deck
   const defCountMap = new Map<string, number>();
-  for (const s of editingDeck?.slots ?? []) {
+  for (const s of slots) {
     defCountMap.set(s.definitionId, (defCountMap.get(s.definitionId) ?? 0) + 1);
   }
+
+  const handlePlay = () => {
+    if (editingDeck) saveActiveDeckId(editingDeck.id);
+    router.push("/play/local");
+  };
 
   // ── Render ────────────────────────────────────────────────
   return (
@@ -392,11 +405,13 @@ export default function DecksPage() {
 
         <div className="flex items-center gap-2">
           <Crown className="size-4 text-[#b8860b]" />
-          <span className="font-serif font-bold text-base text-[#1e3a6e] tracking-wider">Deck Builder</span>
+          <span className="font-serif font-bold text-base text-[#1e3a6e] tracking-wider">
+            Deck Builder
+          </span>
         </div>
 
         <button
-          onClick={() => { if (activeDeckId) saveActiveDeckId(activeDeckId); router.push("/play/local"); }}
+          onClick={handlePlay}
           disabled={!canPlay}
           className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:opacity-90"
           style={{
@@ -405,7 +420,7 @@ export default function DecksPage() {
           }}
         >
           <Play className="size-3 fill-current" />
-          {canPlay ? "Play" : `${count}/${MAX_PIECES}`}
+          Play
         </button>
       </header>
 
@@ -455,12 +470,18 @@ export default function DecksPage() {
                       onClick={e => e.stopPropagation()}
                     />
                   ) : (
-                    <span className="flex-1 font-serif text-xs text-[#1e3a6e] truncate">{deck.name}</span>
+                    <span className="flex-1 font-serif text-xs text-[#1e3a6e] truncate">
+                      {deck.name}
+                    </span>
                   )}
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <button
-                      onClick={e => { e.stopPropagation(); setRenamingId(deck.id); setRenameValue(deck.name); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        setRenamingId(deck.id);
+                        setRenameValue(deck.name);
+                      }}
                       className="text-[#8b7d6b] hover:text-[#1e3a6e] cursor-pointer"
                     >
                       <Edit2 className="size-3" />
@@ -486,26 +507,26 @@ export default function DecksPage() {
         <main className="flex-1 flex flex-col gap-3 p-3 sm:p-4 overflow-y-auto min-w-0">
 
           {/* Info bar */}
-          <div className="flex items-center justify-between shrink-0">
+          <div className="flex items-center justify-between shrink-0 flex-wrap gap-2">
             <div>
               <h2 className="font-serif font-bold text-sm text-[#1e3a6e]">
                 {editingDeck?.name ?? "—"}
               </h2>
               <p className="text-[10px] text-[#8b7d6b] mt-0.5">
                 {selectedDef
-                  ? `Placing: ${selectedDef.name} — click a highlighted tile`
-                  : "Select a piece from the right → click your zone (rows 11–15)"}
+                  ? `Placing: ${selectedDef.name} — click your zone`
+                  : "Select a piece → click highlighted zone (rows 11–15)"}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Piece count badge */}
+              {/* Piece count */}
               <span
                 className="px-2.5 py-1 rounded-full text-xs font-semibold"
                 style={{
-                  background: count >= MAX_PIECES ? "rgba(74,222,128,0.15)" : "rgba(201,168,76,0.12)",
-                  color: count >= MAX_PIECES ? "#4ade80" : "#b8860b",
-                  border: `1px solid ${count >= MAX_PIECES ? "rgba(74,222,128,0.4)" : "#c9a84c40"}`,
+                  background: canPlay ? "rgba(74,222,128,0.15)" : "rgba(201,168,76,0.12)",
+                  color: canPlay ? "#4ade80" : "#b8860b",
+                  border: `1px solid ${canPlay ? "rgba(74,222,128,0.4)" : "#c9a84c40"}`,
                 }}
               >
                 {count}/{MAX_PIECES}
@@ -521,6 +542,38 @@ export default function DecksPage() {
             </div>
           </div>
 
+          {/* Validation feedback */}
+          {deckErrors.length > 0 && (
+            <div className="flex flex-col gap-1 shrink-0">
+              {deckErrors.map(err => (
+                <div
+                  key={err}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px]"
+                  style={{
+                    background: "rgba(248,113,113,0.1)",
+                    color: "#f87171",
+                    border: "1px solid rgba(248,113,113,0.25)",
+                  }}
+                >
+                  ⚠ {err}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {canPlay && (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] shrink-0"
+              style={{
+                background: "rgba(74,222,128,0.1)",
+                color: "#4ade80",
+                border: "1px solid rgba(74,222,128,0.25)",
+              }}
+            >
+              ✓ Deck ready — hit Play!
+            </div>
+          )}
+
           {/* Board */}
           <div className="flex-1 flex items-center justify-center min-h-0">
             <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg xl:max-w-xl">
@@ -532,7 +585,9 @@ export default function DecksPage() {
                 />
               ) : (
                 <div className="aspect-square flex items-center justify-center rounded-xl border border-dashed border-[#c9a84c40]">
-                  <p className="text-sm text-[#8b7d6b] italic font-serif">Select or create a deck</p>
+                  <p className="text-sm text-[#8b7d6b] italic font-serif">
+                    Select or create a deck
+                  </p>
                 </div>
               )}
             </div>
@@ -541,21 +596,17 @@ export default function DecksPage() {
           {/* Legend */}
           <div className="flex items-center gap-4 shrink-0 flex-wrap">
             {[
-              { color: "rgba(74,222,128,0.15)", border: "rgba(74,222,128,0.4)", label: "Your zone (rows 11–15)" },
-              { color: "rgba(201,168,76,0.2)",  border: "#c9a84c60",            label: "Piece placed" },
-              { color: "transparent",           border: "#2c2c2c30",            label: "Outside zone" },
+              { color: "rgba(74,222,128,0.15)",  border: "rgba(74,222,128,0.4)", label: "Your zone" },
+              { color: "rgba(201,168,76,0.2)",   border: "#c9a84c60",            label: "Piece placed" },
             ].map(({ color, border, label }) => (
               <div key={label} className="flex items-center gap-1.5">
-                <div
-                  className="w-4 h-4 rounded-sm border"
-                  style={{ background: color, borderColor: border }}
-                />
+                <div className="w-4 h-4 rounded-sm border" style={{ background: color, borderColor: border }} />
                 <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">{label}</span>
               </div>
             ))}
           </div>
 
-          {/* Mobile: piece picker below board */}
+          {/* Mobile piece picker */}
           <div className="lg:hidden flex flex-col gap-2 mt-1">
             <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">Select Piece</span>
             <div className="grid grid-cols-2 gap-1.5">
@@ -598,7 +649,7 @@ export default function DecksPage() {
           </div>
 
           {/* Selected piece detail */}
-          {selectedDef && (
+          {selectedDef != null && (
             <div
               className="rounded-lg border px-3 py-3 flex flex-col gap-2 mt-1"
               style={{ background: "rgba(201,168,76,0.06)", borderColor: "#c9a84c40" }}
@@ -633,8 +684,13 @@ export default function DecksPage() {
                   <span className="text-[9px] text-[#8b7d6b]">{ab.description}</span>
                 </div>
               ))}
-              <p className="text-[9px] text-[#b8860b] italic mt-1">
-                Click any highlighted tile on the board to place
+              {REQUIRED_PIECES[selectedDef.typeId] && (
+                <p className="text-[9px] text-[#f87171] italic">
+                  Required — exactly 1 per deck
+                </p>
+              )}
+              <p className="text-[9px] text-[#b8860b] italic">
+                Click a highlighted tile to place
               </p>
             </div>
           )}

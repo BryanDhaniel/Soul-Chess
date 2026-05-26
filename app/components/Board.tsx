@@ -10,6 +10,8 @@ import { getPieceDefinitionById } from "../lib/pieceRegistry";
 interface BoardProps {
   state: GameState;
   onTileClick: (row: number, col: number, piece: Piece | null) => void;
+  /** When true, board is rendered from Black's POV (row 15 at bottom) */
+  flipped?: boolean;
 }
 
 const GRID = 16;
@@ -111,7 +113,7 @@ function PieceToken({
 }
 
 // ─── Board ────────────────────────────────────────────────────
-export function Board({ state, onTileClick }: BoardProps) {
+export function Board({ state, onTileClick, flipped = false }: BoardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(32);
 
@@ -138,6 +140,11 @@ export function Board({ state, onTileClick }: BoardProps) {
     pieceByCoord.set(coordKey(p.position), p);
   }
 
+  // Tiles in render order — reversed when viewing from Black's side
+  const tiles = flipped
+    ? [...state.board.flat()].reverse()
+    : state.board.flat();
+
   return (
     <div
       ref={containerRef}
@@ -159,7 +166,7 @@ export function Board({ state, onTileClick }: BoardProps) {
           gridTemplateRows:    `repeat(${GRID},1fr)`,
         }}
       >
-        {state.board.flat().map(tile => {
+        {tiles.map(tile => {
           if (!tile.isInside) {
             return (
               <div
