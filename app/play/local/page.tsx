@@ -1,5 +1,5 @@
 // ============================================================
-// SOULCHESS — /play/local  (Refined Fantasy Parchment v3)
+// SOULCHESS — /play/local
 // ============================================================
 "use client";
 import { useState, useCallback, useEffect } from "react";
@@ -18,22 +18,24 @@ import {
 } from "../../lib/deckStorage";
 import type { AIDifficulty } from "../../lib/ai";
 
-// ─── CSS keyframes ────────────────────────────────────────────
+// ─── Keyframes ────────────────────────────────────────────────
 const STYLES = `
-  @keyframes slideDown  { from{opacity:0;transform:translateY(-14px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes slideUp    { from{opacity:0;transform:translateY(14px)}  to{opacity:1;transform:translateY(0)} }
-  @keyframes scaleIn    { from{opacity:0;transform:scale(0.93)}       to{opacity:1;transform:scale(1)} }
-  @keyframes panelIn    { from{opacity:0;transform:translateX(20px) scale(0.97)} to{opacity:1;transform:translateX(0) scale(1)} }
-  @keyframes panelOut   { from{opacity:1;transform:translateX(0) scale(1)}       to{opacity:0;transform:translateX(20px) scale(0.97)} }
-  @keyframes fadeIn     { from{opacity:0} to{opacity:1} }
-  @keyframes turnPop    { 0%{transform:scale(1)} 45%{transform:scale(1.06)} 100%{transform:scale(1)} }
-  @keyframes shimmer    { 0%,100%{opacity:0.45} 50%{opacity:1} }
-  @keyframes winDrop    { from{opacity:0;transform:scale(0.85) translateY(-20px)} to{opacity:1;transform:scale(1) translateY(0)} }
-  @keyframes modeIn     { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes fabPop     { from{opacity:0;transform:scale(0.8) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  @keyframes slideDown { from{opacity:0;transform:translateY(-14px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideUp   { from{opacity:0;transform:translateY(14px)}  to{opacity:1;transform:translateY(0)} }
+  @keyframes scaleIn   { from{opacity:0;transform:scale(0.93)}       to{opacity:1;transform:scale(1)} }
+  @keyframes panelIn   { from{opacity:0;transform:translateX(20px) scale(0.97)} to{opacity:1;transform:translateX(0) scale(1)} }
+  @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+  @keyframes turnPop   { 0%{transform:scale(1)} 45%{transform:scale(1.06)} 100%{transform:scale(1)} }
+  @keyframes shimmer   { 0%,100%{opacity:0.45} 50%{opacity:1} }
+  @keyframes winDrop   { from{opacity:0;transform:scale(0.85) translateY(-20px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  @keyframes modeIn    { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fabPop    { from{opacity:0;transform:scale(0.8) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  @keyframes spin      { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  @keyframes pulseDot  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.55;transform:scale(0.8)} }
+  @keyframes avatarIn  { from{opacity:0;transform:translateX(-12px)} to{opacity:1;transform:translateX(0)} }
 `;
 
-// ─── Constants ────────────────────────────────────────────────
+// ─── Player config ────────────────────────────────────────────
 const PLAYER_CFG: Record<Player, { label: string; color: string }> = {
   white: { label: "White Mage",  color: "#c9a84c" },
   black: { label: "Shadow Lord", color: "#9b6de0" },
@@ -54,6 +56,112 @@ function OrnDivider() {
   );
 }
 
+// ─── Player Avatar Card ───────────────────────────────────────
+type GameMode = "ai-black" | "ai-white" | "pvp";
+
+function PlayerCard({
+  player, isAI, isActive, piecesLeft,
+}: {
+  player: Player;
+  isAI: boolean;
+  isActive: boolean;
+  piecesLeft: number;
+}) {
+  const cfg      = PLAYER_CFG[player];
+  const initials = isAI ? "AI" : player === "white" ? "WM" : "SL";
+  const name     = isAI ? "Shadow AI" : cfg.label;
+  const rank     = isAI ? "Arcane Bot" : "Grandmaster";
+
+  return (
+    <div
+      className="flex flex-col items-center gap-1.5 w-14"
+      style={{ opacity: isActive ? 1 : 0.5, transition: "opacity 0.4s ease" }}
+    >
+      {/* Avatar with active ring */}
+      <div className="relative">
+        {/* Spinning conic ring when active */}
+        {isActive && (
+          <div
+            className="absolute rounded-full"
+            style={{
+              inset: -3,
+              background: `conic-gradient(${cfg.color} 0deg, ${cfg.color}60 120deg, transparent 120deg)`,
+              borderRadius: "50%",
+              animation: "spin 2.5s linear infinite",
+            }}
+          />
+        )}
+        {/* Avatar circle */}
+        <div
+          className="relative w-11 h-11 rounded-full flex items-center justify-center z-10"
+          style={{
+            background: player === "white"
+              ? "linear-gradient(135deg,#fdfbf7 0%,#e8dcc6 100%)"
+              : "linear-gradient(135deg,#1a1f2e 0%,#0d111a 100%)",
+            border: `2px solid ${isActive ? cfg.color : cfg.color + "45"}`,
+            boxShadow: isActive ? `0 0 0 2px ${cfg.color}25, 0 4px 14px ${cfg.color}25` : "none",
+            transition: "box-shadow 0.4s ease, border-color 0.4s ease",
+          }}
+        >
+          {isAI ? (
+            <Bot
+              className="size-4"
+              style={{ color: cfg.color, animation: isActive ? "shimmer 1.2s ease infinite" : "none" }}
+            />
+          ) : (
+            <span
+              className="font-serif font-bold text-[10px]"
+              style={{ color: player === "white" ? "#1e3a6e" : cfg.color }}
+            >
+              {initials}
+            </span>
+          )}
+        </div>
+        {/* Active dot */}
+        {isActive && (
+          <div
+            className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full z-20"
+            style={{
+              background: cfg.color,
+              border: "2px solid #f5f0e8",
+              boxShadow: `0 0 5px ${cfg.color}`,
+              animation: "pulseDot 1.4s ease infinite",
+            }}
+          />
+        )}
+      </div>
+
+      {/* Name */}
+      <div className="flex flex-col items-center text-center">
+        <span
+          className="font-serif font-bold leading-tight text-center"
+          style={{ fontSize: 9, color: isActive ? cfg.color : "#8b7d6b" }}
+        >
+          {player === "white" ? "White" : "Black"}
+        </span>
+        <span style={{ fontSize: 7, color: "#8b7d6b", letterSpacing: "0.05em" }}>
+          {rank}
+        </span>
+      </div>
+
+      {/* Piece count pill */}
+      <div
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded-full"
+        style={{
+          background: isActive ? `${cfg.color}18` : "rgba(0,0,0,0.05)",
+          border: `1px solid ${isActive ? cfg.color + "40" : "rgba(0,0,0,0.08)"}`,
+          transition: "background 0.4s ease, border-color 0.4s ease",
+        }}
+      >
+        <span style={{ fontSize: 8, fontWeight: 700, color: isActive ? cfg.color : "#8b7d6b" }}>
+          {piecesLeft}
+        </span>
+        <span style={{ fontSize: 7, color: "#8b7d6b", letterSpacing: "0.05em" }}>pcs</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Floating Piece Info Panel ────────────────────────────────
 function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
   const def   = getPieceDefinitionById(piece.definitionId);
@@ -64,8 +172,7 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
     <div
       className="absolute z-40 flex flex-col overflow-hidden"
       style={{
-        top: 16, right: 16,
-        width: 220,
+        top: 16, right: 16, width: 220,
         background: "rgba(253,251,247,0.97)",
         border: "1px solid rgba(201,168,76,0.35)",
         borderRadius: 14,
@@ -86,16 +193,14 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
           {def.symbol}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-serif font-bold text-sm text-[#1e3a6e] leading-tight truncate">
-            {def.name}
-          </p>
+          <p className="font-serif font-bold text-sm text-[#1e3a6e] leading-tight truncate">{def.name}</p>
           <p className="text-[9px] uppercase tracking-wider mt-0.5 truncate" style={{ color: fc }}>
             {def.faction} · T{def.tier}
           </p>
         </div>
         <button
           onClick={onClose}
-          className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+          className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
           style={{ color: "#8b7d6b" }}
         >
           <X className="size-3" />
@@ -103,7 +208,7 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
       </div>
 
       <div className="flex flex-col gap-3 p-4">
-        {/* Stats row */}
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-1.5">
           {piece.maxHp > 0 ? (
             <div className="flex flex-col items-center gap-1 py-2 rounded-lg"
@@ -140,20 +245,18 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
 
         {/* HP bar */}
         {piece.maxHp > 0 && (
-          <div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.08)" }}>
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${hpPct}%`,
-                  background: hpPct > 60
-                    ? "linear-gradient(90deg,#4ade80,#22c55e)"
-                    : hpPct > 30
-                      ? "linear-gradient(90deg,#facc15,#f59e0b)"
-                      : "linear-gradient(90deg,#f87171,#ef4444)",
-                }}
-              />
-            </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.08)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${hpPct}%`,
+                background: hpPct > 60
+                  ? "linear-gradient(90deg,#4ade80,#22c55e)"
+                  : hpPct > 30
+                    ? "linear-gradient(90deg,#facc15,#f59e0b)"
+                    : "linear-gradient(90deg,#f87171,#ef4444)",
+              }}
+            />
           </div>
         )}
 
@@ -168,9 +271,7 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
                 key={ab.id}
                 className="flex items-center justify-between px-2.5 py-2 rounded-lg"
                 style={{
-                  background: ab.currentCooldown > 0
-                    ? "rgba(0,0,0,0.03)"
-                    : "rgba(155,109,224,0.08)",
+                  background: ab.currentCooldown > 0 ? "rgba(0,0,0,0.03)" : "rgba(155,109,224,0.08)",
                   border: `1px solid ${ab.currentCooldown > 0 ? "rgba(0,0,0,0.06)" : "rgba(155,109,224,0.28)"}`,
                 }}
               >
@@ -218,28 +319,22 @@ function WinOverlay({ winner, onRematch, onExit }: {
           minWidth: 260,
         }}
       >
-        {/* Crown icon */}
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center"
           style={{ background: `${cfg.color}15`, border: `2px solid ${cfg.color}50` }}
         >
           <Crown className="size-8" style={{ color: cfg.color }} />
         </div>
-
-        <div className="text-center flex flex-col gap-1.5">
+        <div className="text-center flex flex-col gap-1.5 w-full">
           <p className="text-[10px] uppercase tracking-[0.4em] text-[#8b7d6b]">Victory</p>
-          <h2
-            className="font-serif font-bold text-2xl uppercase tracking-widest"
-            style={{ color: cfg.color }}
-          >
+          <h2 className="font-serif font-bold text-2xl uppercase tracking-widest" style={{ color: cfg.color }}>
             {cfg.label}
           </h2>
           <OrnDivider />
           <p className="text-[10px] text-[#8b7d6b] italic font-serif mt-1">
-            &ldquo;The board is a battlefield of souls.&ldquo;
+            &quot;The board is a battlefield of souls.&quot;
           </p>
         </div>
-
         <div className="flex gap-2.5 w-full">
           <button
             onClick={onRematch}
@@ -250,12 +345,8 @@ function WinOverlay({ winner, onRematch, onExit }: {
           </button>
           <button
             onClick={onExit}
-            className="flex-1 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors"
-            style={{
-              border: "1px solid rgba(201,168,76,0.35)",
-              color: "#8b7d6b",
-              background: "transparent",
-            }}
+            className="flex-1 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider cursor-pointer"
+            style={{ border: "1px solid rgba(201,168,76,0.35)", color: "#8b7d6b", background: "transparent" }}
           >
             Exit
           </button>
@@ -266,16 +357,14 @@ function WinOverlay({ winner, onRematch, onExit }: {
 }
 
 // ─── Mode Select ──────────────────────────────────────────────
-type GameMode = "ai-black" | "ai-white" | "pvp";
-
 function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const t = setTimeout(() => setMounted(true), 30); return () => clearTimeout(t); }, []);
 
-  const modes: { mode: GameMode; icon: React.ReactNode; title: string; sub: string; color: string; delay: string }[] = [
-    { mode: "ai-black",  icon: <User className="size-6 text-[#fdfbf7]" />,   title: "Play as White", sub: "You (White) vs AI (Black)", color: "#c9a84c", delay: "0.15s" },
-    { mode: "ai-white",  icon: <User className="size-6 text-[#9b6de0]" />,   title: "Play as Black", sub: "AI (White) vs You (Black)", color: "#9b6de0", delay: "0.22s" },
-    { mode: "pvp",       icon: <User className="size-6 text-[#8b7d6b]" />,   title: "Local PvP",     sub: "Two players, one screen",   color: "#8b7d6b", delay: "0.29s" },
+  const modes: { mode: GameMode; title: string; sub: string; color: string; delay: string }[] = [
+    { mode: "ai-black", title: "Play as White", sub: "You (White) vs AI (Black)", color: "#c9a84c", delay: "0.15s" },
+    { mode: "ai-white", title: "Play as Black", sub: "AI (White) vs You (Black)", color: "#9b6de0", delay: "0.22s" },
+    { mode: "pvp",      title: "Local PvP",     sub: "Two players, one screen",   color: "#8b7d6b", delay: "0.29s" },
   ];
 
   return (
@@ -285,7 +374,6 @@ function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
         className="min-h-screen w-full flex flex-col items-center justify-center gap-10 p-8"
         style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 50%,#ece4d3 100%)" }}
       >
-        {/* Chess pattern overlay */}
         <div
           className="pointer-events-none fixed inset-0 opacity-[0.04]"
           style={{
@@ -293,8 +381,6 @@ function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
             backgroundSize: "56px 56px",
           }}
         />
-
-        {/* Logo */}
         <div
           className="flex flex-col items-center gap-3 relative z-10"
           style={{ animation: mounted ? "slideDown 0.45s ease both 0.05s" : "none" }}
@@ -306,21 +392,15 @@ function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
             <Crown className="size-7 text-[#b8860b]" />
           </div>
           <div className="text-center">
-            <h1 className="font-serif font-bold text-3xl text-[#1e3a6e] tracking-widest uppercase">
-              SoulChess
-            </h1>
-            <p className="text-[10px] uppercase tracking-[0.45em] text-[#8b7d6b] mt-1">
-              Choose your battle
-            </p>
+            <h1 className="font-serif font-bold text-3xl text-[#1e3a6e] tracking-widest uppercase">SoulChess</h1>
+            <p className="text-[10px] uppercase tracking-[0.45em] text-[#8b7d6b] mt-1">Choose your battle</p>
           </div>
         </div>
-
-        {/* Mode cards */}
         <div
           className="flex flex-col gap-3 w-full max-w-xs relative z-10"
           style={{ animation: mounted ? "slideUp 0.45s ease both 0.1s" : "none" }}
         >
-          {modes.map(({ mode, icon, title, sub, color, delay }) => (
+          {modes.map(({ mode, title, sub, color, delay }) => (
             <button
               key={mode}
               onClick={() => onSelect(mode)}
@@ -337,7 +417,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
                 className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
                 style={{ background: `${color}20`, border: `1px solid ${color}40` }}
               >
-                {icon}
+                <User className="size-5" style={{ color }} />
               </div>
               <div className="flex flex-col">
                 <span className="font-serif font-bold text-sm text-[#1e3a6e]">{title}</span>
@@ -378,8 +458,9 @@ function BattleView({
   } = useGameState({ whiteDeck, blackDeck, aiPlayers, aiDelay: 600 });
 
   const { currentPlayer, turnNumber, phase, winner } = state;
-  const cfg = PLAYER_CFG[currentPlayer];
+  const cfg         = PLAYER_CFG[currentPlayer];
   const isCurrentAI = mode !== "pvp" && currentPlayer !== humanPlayer;
+  const opponentPlayer: Player = humanPlayer === "white" ? "black" : "white";
 
   // Auto-open panel when piece selected
   useEffect(() => {
@@ -390,7 +471,7 @@ function BattleView({
     if (isAITurn || phase !== "battle") return;
     if (mode !== "pvp" && currentPlayer !== humanPlayer) return;
     const coord = { row, col };
-    const key = coordKey(coord);
+    const key   = coordKey(coord);
     if (piece && validAttackKeys.has(key) && piece.owner !== currentPlayer) {
       attackPiece(piece.id); return;
     }
@@ -401,8 +482,14 @@ function BattleView({
       piece.id === state.selectedPieceId ? deselect() : selectPiece(piece.id); return;
     }
     deselect();
-  }, [isAITurn, phase, mode, currentPlayer, humanPlayer, state.selectedPieceId,
-      validMoveKeys, validAttackKeys, movePiece, attackPiece, selectPiece, deselect]);
+  }, [
+    isAITurn, phase, mode, currentPlayer, humanPlayer, state.selectedPieceId,
+    validMoveKeys, validAttackKeys, movePiece, attackPiece, selectPiece, deselect,
+  ]);
+
+  // Piece counts
+  const opponentPieces = Object.values(state.pieces).filter(p => p.owner === opponentPlayer).length;
+  const humanPieces    = Object.values(state.pieces).filter(p => p.owner === humanPlayer).length;
 
   return (
     <>
@@ -416,7 +503,7 @@ function BattleView({
           <WinOverlay winner={winner} onRematch={onRematch} onExit={() => router.push("/")} />
         )}
 
-        {/* ── Header ─────────────────────────────────────── */}
+        {/* ── Header ─────────────────────────────────── */}
         <header
           className="flex items-center justify-between px-5 py-2 shrink-0"
           style={{
@@ -426,32 +513,27 @@ function BattleView({
             animation: mounted ? "slideDown 0.35s ease both" : "none",
           }}
         >
-          {/* Left: back */}
           <button
             onClick={() => router.push("/")}
-            className="flex items-center gap-1.5 cursor-pointer transition-colors"
+            className="flex items-center gap-1.5 cursor-pointer"
             style={{ color: "#8b7d6b" }}
           >
             <ChevronLeft className="size-4" />
             <span className="text-[10px] uppercase tracking-[0.3em] font-medium hidden sm:block">Exit</span>
           </button>
 
-          {/* Centre: turn indicator */}
           <div
             className="flex flex-col items-center gap-0.5"
-            style={{ animation: "turnPop 0.35s ease both" }}
             key={`${currentPlayer}-${turnNumber}`}
+            style={{ animation: "turnPop 0.35s ease both" }}
           >
             <div className="flex items-center gap-2">
               {isCurrentAI
                 ? <Bot className="size-3.5" style={{ color: cfg.color, animation: "shimmer 1.2s ease infinite" }} />
                 : <User className="size-3.5" style={{ color: cfg.color }} />
               }
-              <span
-                className="font-serif font-bold text-sm uppercase tracking-widest"
-                style={{ color: cfg.color }}
-              >
-                {isCurrentAI ? `${cfg.label} (AI)` : `${cfg.label}`}
+              <span className="font-serif font-bold text-sm uppercase tracking-widest" style={{ color: cfg.color }}>
+                {isCurrentAI ? `${cfg.label} (AI)` : cfg.label}
               </span>
             </div>
             <span className="text-[9px] uppercase tracking-[0.3em] text-[#8b7d6b]">
@@ -459,7 +541,6 @@ function BattleView({
             </span>
           </div>
 
-          {/* Right: logo */}
           <div className="flex items-center gap-1.5">
             <Crown className="size-4 text-[#b8860b]" />
             <span className="font-serif font-bold text-sm text-[#1e3a6e] tracking-wider hidden sm:block">
@@ -468,35 +549,71 @@ function BattleView({
           </div>
         </header>
 
-        {/* ── Board area ──────────────────────────────────── */}
+        {/* ── Main area: avatar col + board ──────────── */}
         <div className="flex-1 flex items-center justify-center p-2 min-h-0 relative">
 
-          {/* Board */}
-          <div
-            style={{
-              width:  "min(100%, calc(100vh - 60px))",
-              height: "min(100%, calc(100vh - 60px))",
-              maxWidth: 720, maxHeight: 720,
-              aspectRatio: "1/1",
-              animation: mounted ? "scaleIn 0.45s ease both 0.05s" : "none",
-            }}
-          >
-            <Board
-              state={state}
-              onTileClick={handleTileClick}
-              flipped={humanPlayer === "black"}
-            />
+          {/* Inner row: avatar sidebar + board */}
+          <div className="flex items-center gap-3 h-full w-full max-w-fit">
+
+            {/* Avatar column — hidden on mobile */}
+            <div
+              className="hidden sm:flex flex-col justify-between items-center self-stretch py-2 shrink-0"
+              style={{ animation: mounted ? "avatarIn 0.45s ease both 0.15s" : "none" }}
+            >
+              {/* Opponent avatar (top) */}
+              <PlayerCard
+                player={opponentPlayer}
+                isAI={mode !== "pvp"}
+                isActive={currentPlayer === opponentPlayer}
+                piecesLeft={opponentPieces}
+              />
+
+              {/* Turn number in centre */}
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="w-px" style={{ height: 28, background: "linear-gradient(180deg,transparent,rgba(201,168,76,0.35))" }} />
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)" }}
+                >
+                  <span className="font-serif text-[9px] font-bold text-[#b8860b]">{turnNumber}</span>
+                </div>
+                <div className="w-px" style={{ height: 28, background: "linear-gradient(180deg,rgba(201,168,76,0.35),transparent)" }} />
+              </div>
+
+              {/* Human avatar (bottom) */}
+              <PlayerCard
+                player={humanPlayer}
+                isAI={false}
+                isActive={currentPlayer === humanPlayer}
+                piecesLeft={humanPieces}
+              />
+            </div>
+
+            {/* Board */}
+            <div
+              style={{
+                width:  "min(100%, calc(100vh - 60px))",
+                height: "min(100%, calc(100vh - 60px))",
+                maxWidth: 680, maxHeight: 680,
+                aspectRatio: "1/1",
+                animation: mounted ? "scaleIn 0.45s ease both 0.05s" : "none",
+              }}
+            >
+              <Board
+                state={state}
+                onTileClick={handleTileClick}
+                flipped={humanPlayer === "black"}
+              />
+            </div>
           </div>
 
-          {/* Floating piece info panel */}
+          {/* Floating piece info panel (absolute over board) */}
           {selectedPiece && panelOpen && (
             <PiecePanel
               piece={selectedPiece}
               onClose={() => { setPanelOpen(false); deselect(); }}
             />
           )}
-
-
 
           {/* Legend — bottom left */}
           <div
@@ -520,18 +637,11 @@ function BattleView({
             className="absolute bottom-3 right-3 flex flex-col gap-1.5 items-end"
             style={{ animation: mounted ? "fabPop 0.4s ease both 0.2s" : "none" }}
           >
-            {/* Piece info toggle */}
             <button
-              onClick={() => {
-                if (selectedPiece) {
-                  setPanelOpen(p => !p);
-                }
-              }}
-              className="flex items-center gap-2 px-3.5 py-2 cursor-pointer transition-all hover:scale-[1.04]"
+              onClick={() => selectedPiece && setPanelOpen(p => !p)}
+              className="flex items-center gap-2 px-3.5 py-2 cursor-pointer transition-all hover:scale-[1.03]"
               style={{
-                background: selectedPiece && panelOpen
-                  ? "rgba(201,168,76,0.15)"
-                  : "rgba(253,251,247,0.95)",
+                background: selectedPiece && panelOpen ? "rgba(201,168,76,0.15)" : "rgba(253,251,247,0.95)",
                 border: `1px solid ${selectedPiece && panelOpen ? "rgba(201,168,76,0.7)" : "rgba(201,168,76,0.3)"}`,
                 borderRadius: 20,
                 boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
@@ -545,11 +655,9 @@ function BattleView({
                 {selectedPiece ? (panelOpen ? "Hide Info" : "Show Info") : "Piece Info"}
               </span>
             </button>
-
-            {/* Edit decks */}
             <button
               onClick={() => router.push("/decks")}
-              className="flex items-center gap-2 px-3.5 py-2 cursor-pointer transition-all hover:scale-[1.04]"
+              className="flex items-center gap-2 px-3.5 py-2 cursor-pointer transition-all hover:scale-[1.03]"
               style={{
                 background: "rgba(253,251,247,0.95)",
                 border: "1px solid rgba(201,168,76,0.25)",
@@ -560,9 +668,7 @@ function BattleView({
               }}
             >
               <Layers className="size-3.5" />
-              <span className="font-serif text-[10px] font-semibold uppercase tracking-wider">
-                Edit Decks
-              </span>
+              <span className="font-serif text-[10px] font-semibold uppercase tracking-wider">Edit Decks</span>
             </button>
           </div>
         </div>
@@ -585,9 +691,9 @@ function useDecks() {
 
 // ─── Page entry ───────────────────────────────────────────────
 export default function PlayLocalPage() {
-  const playerDeck = useDecks();
-  const [mode, setMode]       = useState<GameMode | null>(null);
-  const [aiDeck, setAiDeck]   = useState<DeckConfig | null>(null);
+  const playerDeck        = useDecks();
+  const [mode, setMode]   = useState<GameMode | null>(null);
+  const [aiDeck, setAiDeck] = useState<DeckConfig | null>(null);
   const [rematchKey, setRematchKey] = useState(0);
 
   if (!playerDeck) {
