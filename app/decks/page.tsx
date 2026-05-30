@@ -1,39 +1,60 @@
 // ============================================================
-// SOULCHESS — /decks  Deck Builder
+// SOULCHESS — /decks  Deck Builder (Refined v2)
 // ============================================================
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Plus, Trash2, Edit2, Star, Play,
-  Heart, Swords, Shield, X, Crown,
+  Heart, Swords, Shield, X, Crown, Check, AlertCircle,
 } from "lucide-react";
 import type { DeckConfig, FormationSlot, PieceDefinition, Coord } from "../types/game";
 import { getAllDefinitions, getPieceDefinitionById } from "../lib/pieceRegistry";
 import {
   loadDecks, saveDecks, loadActiveDeckId, saveActiveDeckId,
   createNewDeck, upsertDeck, deleteDeck, makeDefaultDeck,
-  isInDeployZone, WHITE_ZONE_MIN_ROW, WHITE_ZONE_MAX_ROW, MAX_PIECES,
+  isInDeployZone, WHITE_ZONE_MIN_ROW, MAX_PIECES,
   REQUIRED_PIECES, isDeckValid, getDeckErrors,
 } from "../lib/deckStorage";
 import { isInsideOctagon, coordKey, GRID_SIZE } from "../lib/boardUtils";
 
-// ─── Visual constants ─────────────────────────────────────────
+// ─── Keyframes ────────────────────────────────────────────────
+const STYLES = `
+  @keyframes slideDown  { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideUp    { from{opacity:0;transform:translateY(12px)}  to{opacity:1;transform:translateY(0)} }
+  @keyframes slideRight { from{opacity:0;transform:translateX(-12px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes fadeIn     { from{opacity:0} to{opacity:1} }
+  @keyframes cardIn     { from{opacity:0;transform:scale(0.96) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
+  @keyframes pulse      { 0%,100%{opacity:1} 50%{opacity:0.55} }
+`;
+
+// ─── Constants ────────────────────────────────────────────────
 const FACTION_COLOR: Record<string, string> = {
   Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0", Fire: "#e05c2a",
 };
-const TIER_COLOR: Record<number, string> = {
-  1: "#8b7d6b", 2: "#3b82f6", 3: "#b8860b",
+const FACTION_BG: Record<string, string> = {
+  Arcane: "rgba(201,168,76,0.08)", Void: "rgba(155,109,224,0.08)",
+  Iron: "rgba(122,143,160,0.08)", Fire: "rgba(224,92,42,0.08)",
 };
+const TIER_LABEL: Record<number, string> = { 1: "Common", 2: "Rare", 3: "Legendary" };
+const TIER_COLOR: Record<number, string> = { 1: "#8b7d6b", 2: "#3b82f6", 3: "#b8860b" };
+
+// ─── Ornate divider ───────────────────────────────────────────
+function OrnDivider() {
+  return (
+    <div className="flex items-center gap-2 w-full" style={{ opacity: 0.4 }}>
+      <div className="h-px flex-1" style={{ background: "linear-gradient(90deg,transparent,#c9a84c)" }} />
+      <div style={{ width: 4, height: 4, transform: "rotate(45deg)", background: "#c9a84c" }} />
+      <div className="h-px flex-1" style={{ background: "linear-gradient(90deg,#c9a84c,transparent)" }} />
+    </div>
+  );
+}
 
 // ─── Piece Card ───────────────────────────────────────────────
 function PieceCard({
   def, selected, count, onClick,
 }: {
-  def: PieceDefinition;
-  selected: boolean;
-  count: number;
-  onClick: () => void;
+  def: PieceDefinition; selected: boolean; count: number; onClick: () => void;
 }) {
   const fc      = FACTION_COLOR[def.faction] ?? "#c9a84c";
   const rule    = REQUIRED_PIECES[def.typeId];
@@ -42,63 +63,68 @@ function PieceCard({
   return (
     <button
       onClick={isMaxed ? undefined : onClick}
-      className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg border text-left transition-all hover:scale-[1.01]"
+      className="relative flex items-center gap-2.5 w-full px-3 py-2.5 text-left transition-all"
       style={{
         background: isMaxed
-          ? "rgba(74,222,128,0.07)"
+          ? "rgba(74,222,128,0.06)"
           : selected
-            ? `${fc}18`
-            : "rgba(253,251,247,0.6)",
-        borderColor: isMaxed
-          ? "rgba(74,222,128,0.4)"
-          : selected
-            ? fc
-            : "#c9a84c25",
-        boxShadow: selected && !isMaxed ? `0 0 0 1.5px ${fc}` : "none",
+            ? `${fc}12`
+            : "rgba(253,251,247,0.5)",
+        border: `1px solid ${isMaxed ? "rgba(74,222,128,0.35)" : selected ? fc : "rgba(201,168,76,0.18)"}`,
+        borderRadius: 10,
+        boxShadow: selected && !isMaxed ? `0 0 0 2px ${fc}30` : "none",
         cursor: isMaxed ? "default" : "pointer",
-        opacity: isMaxed ? 0.75 : 1,
+        opacity: isMaxed ? 0.7 : 1,
+        transform: selected && !isMaxed ? "scale(1.01)" : "scale(1)",
+        transition: "all 0.15s ease",
       }}
     >
-      <span className="text-lg leading-none shrink-0">{def.symbol}</span>
+      {/* Symbol */}
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
+        style={{ background: FACTION_BG[def.faction] ?? "rgba(201,168,76,0.08)", border: `1px solid ${fc}30` }}
+      >
+        {def.symbol}
+      </div>
+
+      {/* Info */}
       <div className="flex flex-col flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1">
-          <span className="font-serif font-semibold text-xs text-[#1e3a6e] truncate">
-            {def.name}
-          </span>
+        <div className="flex items-center gap-1.5 justify-between">
+          <span className="font-serif font-semibold text-xs text-[#1e3a6e] truncate">{def.name}</span>
           <div className="flex items-center gap-1 shrink-0">
             {rule && (
               <span
-                className="text-[7px] uppercase tracking-wider px-1 py-0.5 rounded font-bold"
+                className="text-[7px] px-1 py-0.5 rounded font-bold uppercase tracking-wider"
                 style={{
-                  background: isMaxed ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.15)",
+                  background: isMaxed ? "rgba(74,222,128,0.18)" : "rgba(248,113,113,0.12)",
                   color: isMaxed ? "#4ade80" : "#f87171",
                 }}
               >
-                {isMaxed ? "✓ Set" : "Required"}
+                {isMaxed ? "✓" : "Req"}
               </span>
             )}
             <span
-              className="text-[8px] uppercase tracking-wider"
-              style={{ color: TIER_COLOR[def.tier] }}
+              className="text-[7px] px-1 py-0.5 rounded uppercase tracking-wider font-medium"
+              style={{ background: `${TIER_COLOR[def.tier]}18`, color: TIER_COLOR[def.tier] }}
             >
               T{def.tier}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[9px] text-[#8b7d6b] flex items-center gap-0.5">
-            <Heart className="size-2.5" />{def.maxHp > 0 ? def.maxHp : "∞"}
+          <span className="text-[8px] flex items-center gap-0.5" style={{ color: "#8b7d6b" }}>
+            <Heart className="size-2" />{def.maxHp > 0 ? def.maxHp : "∞"}
           </span>
-          <span className="text-[9px] text-[#8b7d6b] flex items-center gap-0.5">
-            <Swords className="size-2.5" />{def.attack}
+          <span className="text-[8px] flex items-center gap-0.5" style={{ color: "#8b7d6b" }}>
+            <Swords className="size-2" />{def.attack}
           </span>
-          <span className="text-[9px] text-[#8b7d6b] flex items-center gap-0.5">
-            <Shield className="size-2.5" />{def.defense}
+          <span className="text-[8px] flex items-center gap-0.5" style={{ color: "#8b7d6b" }}>
+            <Shield className="size-2" />{def.defense}
           </span>
           {count > 0 && (
             <span
               className="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full"
-              style={{ background: `${fc}25`, color: fc }}
+              style={{ background: `${fc}20`, color: fc }}
             >
               ×{count}
             </span>
@@ -144,9 +170,9 @@ function BoardPreview({
       style={{
         aspectRatio: "1/1",
         background: "linear-gradient(135deg,#e4dcce 0%,#c3b9a5 100%)",
-        border: "2px solid #2c2c2c",
-        borderRadius: 8,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+        border: "2px solid rgba(44,44,44,0.8)",
+        borderRadius: 10,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.12)",
       }}
     >
       <div
@@ -164,14 +190,14 @@ function BoardPreview({
             return <div key={i} style={{ background: "transparent" }} />;
           }
 
-          const coord: Coord = { row, col };
-          const key     = coordKey(coord);
-          const inZone  = isInDeployZone(coord);
-          const defId   = slotMap.get(key);
-          const def     = defId ? getPieceDefinitionById(defId) : null;
-          const fc      = def ? (FACTION_COLOR[def.faction] ?? "#c9a84c") : null;
-          const isLight = (row + col) % 2 === 0;
-          const baseBg  = isLight ? "#f8f4ec" : "#2c2c2c";
+          const coord: Coord  = { row, col };
+          const key            = coordKey(coord);
+          const inZone         = isInDeployZone(coord);
+          const defId          = slotMap.get(key);
+          const def            = defId ? getPieceDefinitionById(defId) : null;
+          const fc             = def ? (FACTION_COLOR[def.faction] ?? "#c9a84c") : null;
+          const isLight        = (row + col) % 2 === 0;
+          const baseBg         = isLight ? "#f8f4ec" : "#2c2c2c";
 
           return (
             <div
@@ -180,10 +206,6 @@ function BoardPreview({
               style={{
                 background: baseBg,
                 cursor: inZone ? "pointer" : "default",
-                boxShadow:
-                  inZone && selectedDef && !def
-                    ? "inset 0 0 0 1px rgba(201,168,76,0.35)"
-                    : "none",
               }}
               onClick={() => inZone && onTileClick(coord)}
             >
@@ -193,42 +215,52 @@ function BoardPreview({
                   className="absolute inset-0 pointer-events-none"
                   style={{
                     background: def
-                      ? `${fc}20`
+                      ? `${fc}22`
                       : selectedDef
-                        ? "rgba(201,168,76,0.08)"
-                        : "rgba(74,222,128,0.06)",
+                        ? "rgba(201,168,76,0.1)"
+                        : "rgba(74,222,128,0.07)",
                   }}
                 />
               )}
 
-              {/* Placed piece token */}
+              {/* Hover ring (empty zone + piece selected) */}
+              {inZone && !def && selectedDef && (
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ boxShadow: "inset 0 0 0 1px rgba(201,168,76,0.4)" }}
+                />
+              )}
+
+              {/* Placed piece */}
               {def && (
                 <div
                   className="relative flex items-center justify-center rounded-full z-10"
                   style={{
-                    width:  Math.max(12, cellSize * 0.7),
-                    height: Math.max(12, cellSize * 0.7),
+                    width:    Math.max(12, cellSize * 0.72),
+                    height:   Math.max(12, cellSize * 0.72),
                     fontSize: Math.max(7, cellSize * 0.42),
                     background: "linear-gradient(135deg,#fdfbf7 0%,#e8e0d0 100%)",
                     border: `1.5px solid ${fc}`,
-                    boxShadow: `0 0 0 1px ${fc}60`,
+                    boxShadow: `0 0 0 1px ${fc}50`,
                   }}
                 >
-                  <span style={{ lineHeight: 1, display: "block", marginTop: 1 }}>
-                    {def.symbol}
-                  </span>
-                  {/* Remove button */}
+                  <span style={{ lineHeight: 1, display: "block", marginTop: 1 }}>{def.symbol}</span>
+                  {/* Remove btn */}
                   <button
                     onClick={e => { e.stopPropagation(); onTileClick(coord); }}
-                    className="absolute -top-1 -right-1 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer z-20"
+                    className="absolute -top-1 -right-1 rounded-full flex items-center justify-center z-20"
                     style={{
-                      width:  Math.max(10, cellSize * 0.32),
-                      height: Math.max(10, cellSize * 0.32),
+                      width:    Math.max(10, cellSize * 0.3),
+                      height:   Math.max(10, cellSize * 0.3),
                       background: "#f87171",
                       border: "1px solid white",
+                      opacity: 0,
+                      transition: "opacity 0.15s",
                     }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
                   >
-                    <X style={{ width: "60%", height: "60%", color: "white" }} />
+                    <X style={{ width: "55%", height: "55%", color: "white" }} />
                   </button>
                 </div>
               )}
@@ -238,9 +270,9 @@ function BoardPreview({
                 <div
                   className="absolute rounded-full pointer-events-none"
                   style={{
-                    width:  Math.max(3, cellSize * 0.15),
-                    height: Math.max(3, cellSize * 0.15),
-                    background: "rgba(201,168,76,0.4)",
+                    width:  Math.max(3, cellSize * 0.14),
+                    height: Math.max(3, cellSize * 0.14),
+                    background: "rgba(201,168,76,0.45)",
                   }}
                 />
               )}
@@ -251,17 +283,25 @@ function BoardPreview({
 
       {/* Zone label */}
       <div
-        className="absolute right-1 pointer-events-none flex items-center"
-        style={{ top: `${(WHITE_ZONE_MIN_ROW / GRID_SIZE) * 100}%`, fontSize: Math.max(7, cellSize * 0.35) }}
+        className="absolute pointer-events-none flex items-center justify-center"
+        style={{
+          right: 4,
+          top: `${(WHITE_ZONE_MIN_ROW / GRID_SIZE) * 100}%`,
+          fontSize: Math.max(7, cellSize * 0.32),
+          color: "#c9a84c",
+          opacity: 0.55,
+          fontWeight: 700,
+        }}
       >
-        <span className="text-[#c9a84c] font-bold opacity-60">▶</span>
+        ▶
       </div>
 
-      {/* Corner decorations */}
+      {/* Board corners */}
       {(["top-1 left-1 border-t-2 border-l-2", "top-1 right-1 border-t-2 border-r-2",
          "bottom-1 left-1 border-b-2 border-l-2", "bottom-1 right-1 border-b-2 border-r-2"] as const)
         .map((cls, i) => (
-          <div key={i} className={`absolute w-4 h-4 border-[#c9a84c] pointer-events-none rounded-sm ${cls}`} />
+          <div key={i} className={`absolute w-4 h-4 pointer-events-none rounded-sm ${cls}`}
+            style={{ borderColor: "#c9a84c" }} />
         ))}
     </div>
   );
@@ -271,12 +311,15 @@ function BoardPreview({
 export default function DecksPage() {
   const router  = useRouter();
   const allDefs = getAllDefinitions();
+  const [mounted, setMounted] = useState(false);
 
-  const [decks, setDecks]               = useState<DeckConfig[]>([]);
-  const [editingDeck, setEditingDeck]   = useState<DeckConfig | null>(null);
-  const [selectedDef, setSelectedDef]   = useState<PieceDefinition | null>(null);
-  const [renamingId, setRenamingId]     = useState<string | null>(null);
-  const [renameValue, setRenameValue]   = useState("");
+  const [decks, setDecks]             = useState<DeckConfig[]>([]);
+  const [editingDeck, setEditingDeck] = useState<DeckConfig | null>(null);
+  const [selectedDef, setSelectedDef] = useState<PieceDefinition | null>(null);
+  const [renamingId, setRenamingId]   = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  useEffect(() => { setTimeout(() => setMounted(true), 30); }, []);
 
   // ── Load ─────────────────────────────────────────────────
   useEffect(() => {
@@ -291,30 +334,22 @@ export default function DecksPage() {
     setEditingDeck(loaded.find(d => d.id === aid) ?? loaded[0] ?? null);
   }, []);
 
-  // ── Persist ───────────────────────────────────────────────
   const persist = useCallback((next: DeckConfig[]) => {
-    setDecks(next);
-    saveDecks(next);
+    setDecks(next); saveDecks(next);
   }, []);
 
-  // ── Tile click: place or remove ───────────────────────────
+  // ── Tile click ────────────────────────────────────────────
   const handleTileClick = useCallback((coord: Coord) => {
     if (!editingDeck) return;
-
     const existing = editingDeck.slots.find(
       s => s.coord.row === coord.row && s.coord.col === coord.col
     );
-
     let updated: DeckConfig;
-
     if (existing) {
-      // Remove
       updated = { ...editingDeck, slots: editingDeck.slots.filter(s => s !== existing) };
     } else {
-      // Place
       if (!selectedDef) return;
       if (editingDeck.slots.length >= MAX_PIECES) return;
-      // Enforce max-1 for required pieces
       const rule = REQUIRED_PIECES[selectedDef.typeId];
       if (rule) {
         const already = editingDeck.slots.filter(s => s.definitionId === selectedDef.typeId).length;
@@ -323,7 +358,6 @@ export default function DecksPage() {
       const newSlot: FormationSlot = { coord, definitionId: selectedDef.typeId };
       updated = { ...editingDeck, slots: [...editingDeck.slots, newSlot] };
     }
-
     setEditingDeck(updated);
     persist(upsertDeck(decks, updated));
   }, [editingDeck, selectedDef, decks, persist]);
@@ -340,9 +374,7 @@ export default function DecksPage() {
   const handleDeleteDeck = useCallback((id: string) => {
     const next = deleteDeck(decks, id);
     persist(next);
-    if (editingDeck?.id === id) {
-      setEditingDeck(next[0] ?? null);
-    }
+    if (editingDeck?.id === id) setEditingDeck(next[0] ?? null);
   }, [decks, editingDeck, persist]);
 
   const handleSelectDeck = useCallback((deck: DeckConfig) => {
@@ -357,7 +389,6 @@ export default function DecksPage() {
     persist(upsertDeck(decks, updated));
   }, [editingDeck, decks, persist]);
 
-  // ── Rename ────────────────────────────────────────────────
   const commitRename = useCallback(() => {
     if (!renamingId || !renameValue.trim()) { setRenamingId(null); return; }
     const next = decks.map(d => d.id === renamingId ? { ...d, name: renameValue.trim() } : d);
@@ -373,329 +404,392 @@ export default function DecksPage() {
   const canPlay    = editingDeck ? isDeckValid(slots) : false;
   const deckErrors = editingDeck ? getDeckErrors(slots) : [];
 
-  // Count per definition in current deck
   const defCountMap = new Map<string, number>();
   for (const s of slots) {
     defCountMap.set(s.definitionId, (defCountMap.get(s.definitionId) ?? 0) + 1);
   }
 
-  const handlePlay = () => {
-    if (editingDeck) saveActiveDeckId(editingDeck.id);
-    router.push("/play/local");
-  };
-
   // ── Render ────────────────────────────────────────────────
   return (
-    <div
-      className="min-h-screen w-full flex flex-col"
-      style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 45%,#ece4d3 100%)" }}
-    >
-      {/* Header */}
-      <header
-        className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[#c9a84c30] shrink-0"
-        style={{ background: "rgba(253,251,247,0.85)", backdropFilter: "blur(8px)" }}
+    <>
+      <style>{STYLES}</style>
+      <div
+        className="h-screen w-full flex flex-col overflow-hidden"
+        style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 45%,#ece4d3 100%)" }}
       >
-        <button
-          onClick={() => router.push("/")}
-          className="flex items-center gap-2 text-[#8b7d6b] hover:text-[#1e3a6e] transition-colors cursor-pointer"
-        >
-          <ChevronLeft className="size-4" />
-          <span className="text-xs uppercase tracking-widest font-medium">Back</span>
-        </button>
-
-        <div className="flex items-center gap-2">
-          <Crown className="size-4 text-[#b8860b]" />
-          <span className="font-serif font-bold text-base text-[#1e3a6e] tracking-wider">
-            Deck Builder
-          </span>
-        </div>
-
-        <button
-          onClick={handlePlay}
-          disabled={!canPlay}
-          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:opacity-90"
+        {/* Subtle chess pattern */}
+        <div
+          className="pointer-events-none fixed inset-0 opacity-[0.035]"
           style={{
-            background: "linear-gradient(135deg,#c9a84c 0%,#b8860b 100%)",
-            boxShadow: canPlay ? "0 4px 12px rgba(184,134,11,0.3)" : "none",
+            backgroundImage: "repeating-conic-gradient(#2c2c2c 0deg 90deg,transparent 90deg 180deg)",
+            backgroundSize: "48px 48px",
+          }}
+        />
+
+        {/* ── Header ──────────────────────────────────── */}
+        <header
+          className="flex items-center justify-between px-5 py-3 shrink-0 relative z-10"
+          style={{
+            background: "rgba(253,251,247,0.88)",
+            borderBottom: "1px solid rgba(201,168,76,0.22)",
+            backdropFilter: "blur(10px)",
+            animation: mounted ? "slideDown 0.35s ease both" : "none",
           }}
         >
-          <Play className="size-3 fill-current" />
-          Play
-        </button>
-      </header>
+          <button
+            onClick={() => router.push("/")}
+            className="flex items-center gap-1.5 cursor-pointer transition-colors"
+            style={{ color: "#8b7d6b" }}
+          >
+            <ChevronLeft className="size-4" />
+            <span className="text-[10px] uppercase tracking-[0.3em] font-medium hidden sm:block">Back</span>
+          </button>
 
-      {/* Body */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
+          <div className="flex items-center gap-2.5">
+            <Crown className="size-4 text-[#b8860b]" />
+            <span className="font-serif font-bold text-base text-[#1e3a6e] tracking-wider">
+              Deck Builder
+            </span>
+          </div>
 
-        {/* ── Left: Deck List ─────────────────────────────── */}
-        <aside
-          className="flex flex-col gap-3 w-40 sm:w-48 shrink-0 p-3 border-r border-[#c9a84c30] overflow-y-auto"
-          style={{ background: "rgba(253,251,247,0.7)" }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">My Decks</span>
-            <button
-              onClick={handleNewDeck}
-              className="text-[#b8860b] hover:text-[#1e3a6e] transition-colors cursor-pointer"
+          <button
+            onClick={() => {
+              if (editingDeck) saveActiveDeckId(editingDeck.id);
+              router.push("/play/local");
+            }}
+            disabled={!canPlay}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] transition-all disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer hover:opacity-90 hover:scale-[1.02]"
+            style={{
+              background: canPlay
+                ? "linear-gradient(135deg,#c9a84c 0%,#b8860b 100%)"
+                : "rgba(180,170,150,0.4)",
+              boxShadow: canPlay ? "0 4px 14px rgba(184,134,11,0.3)" : "none",
+            }}
+          >
+            <Play className="size-3 fill-current" />
+            {canPlay ? "Play" : `${count}/${MAX_PIECES}`}
+          </button>
+        </header>
+
+        {/* ── Body ─────────────────────────────────────── */}
+        <div className="flex flex-1 overflow-hidden min-h-0 relative z-10">
+
+          {/* ── Left: Deck List ──────────────────────── */}
+          <aside
+            className="flex flex-col w-44 sm:w-52 shrink-0 border-r overflow-hidden"
+            style={{
+              background: "rgba(253,251,247,0.6)",
+              borderColor: "rgba(201,168,76,0.2)",
+              animation: mounted ? "slideRight 0.4s ease both 0.05s" : "none",
+            }}
+          >
+            {/* Aside header */}
+            <div
+              className="flex items-center justify-between px-3 py-3 shrink-0"
+              style={{ borderBottom: "1px solid rgba(201,168,76,0.15)" }}
             >
-              <Plus className="size-4" />
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            {decks.map(deck => {
-              const isActive = deck.id === editingDeck?.id;
-              return (
-                <div
-                  key={deck.id}
-                  className="group flex items-center gap-1.5 rounded-lg px-2.5 py-2 border cursor-pointer transition-all"
-                  style={{
-                    background: isActive ? "rgba(201,168,76,0.12)" : "rgba(253,251,247,0.5)",
-                    borderColor: isActive ? "#c9a84c" : "#c9a84c25",
-                    boxShadow: isActive ? "0 0 0 1px #c9a84c60" : "none",
-                  }}
-                  onClick={() => handleSelectDeck(deck)}
-                >
-                  {renamingId === deck.id ? (
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onChange={e => setRenameValue(e.target.value)}
-                      onBlur={commitRename}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") commitRename();
-                        if (e.key === "Escape") setRenamingId(null);
-                      }}
-                      className="flex-1 bg-transparent text-xs text-[#1e3a6e] font-serif outline-none border-b border-[#c9a84c] min-w-0"
-                      onClick={e => e.stopPropagation()}
-                    />
-                  ) : (
-                    <span className="flex-1 font-serif text-xs text-[#1e3a6e] truncate">
-                      {deck.name}
-                    </span>
-                  )}
-
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        setRenamingId(deck.id);
-                        setRenameValue(deck.name);
-                      }}
-                      className="text-[#8b7d6b] hover:text-[#1e3a6e] cursor-pointer"
-                    >
-                      <Edit2 className="size-3" />
-                    </button>
-                    {decks.length > 1 && (
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDeleteDeck(deck.id); }}
-                        className="text-[#f87171] hover:text-red-600 cursor-pointer"
-                      >
-                        <Trash2 className="size-3" />
-                      </button>
-                    )}
-                  </div>
-
-                  {isActive && <Star className="size-3 text-[#b8860b] shrink-0 fill-current" />}
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        {/* ── Centre: Board Preview ────────────────────────── */}
-        <main className="flex-1 flex flex-col gap-3 p-3 sm:p-4 overflow-y-auto min-w-0">
-
-          {/* Info bar */}
-          <div className="flex items-center justify-between shrink-0 flex-wrap gap-2">
-            <div>
-              <h2 className="font-serif font-bold text-sm text-[#1e3a6e]">
-                {editingDeck?.name ?? "—"}
-              </h2>
-              <p className="text-[10px] text-[#8b7d6b] mt-0.5">
-                {selectedDef
-                  ? `Placing: ${selectedDef.name} — click your zone`
-                  : "Select a piece → click highlighted zone (rows 11–15)"}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Piece count */}
               <span
-                className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                style={{
-                  background: canPlay ? "rgba(74,222,128,0.15)" : "rgba(201,168,76,0.12)",
-                  color: canPlay ? "#4ade80" : "#b8860b",
-                  border: `1px solid ${canPlay ? "rgba(74,222,128,0.4)" : "#c9a84c40"}`,
-                }}
+                className="font-serif text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: "#8b7d6b" }}
               >
-                {count}/{MAX_PIECES}
+                My Decks
               </span>
-
               <button
-                onClick={handleClearDeck}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#f8711340] text-[#f87171] text-xs hover:bg-[#f8711310] transition-colors cursor-pointer"
+                onClick={handleNewDeck}
+                className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-110"
+                style={{ background: "rgba(201,168,76,0.15)", border: "1px solid rgba(201,168,76,0.35)", color: "#b8860b" }}
               >
-                <Trash2 className="size-3" />
-                Clear
+                <Plus className="size-3.5" />
               </button>
             </div>
-          </div>
 
-          {/* Validation feedback */}
-          {deckErrors.length > 0 && (
-            <div className="flex flex-col gap-1 shrink-0">
-              {deckErrors.map(err => (
+            {/* Deck list */}
+            <div className="flex flex-col gap-1.5 p-2 overflow-y-auto flex-1">
+              {decks.map((deck, i) => {
+                const isActive  = deck.id === editingDeck?.id;
+                const isValid   = isDeckValid(deck.slots);
+                return (
+                  <div
+                    key={deck.id}
+                    className="group flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-all"
+                    style={{
+                      background: isActive ? "rgba(201,168,76,0.12)" : "rgba(253,251,247,0.5)",
+                      border: `1px solid ${isActive ? "#c9a84c" : "rgba(201,168,76,0.18)"}`,
+                      borderRadius: 10,
+                      boxShadow: isActive ? "0 0 0 1px rgba(201,168,76,0.4)" : "none",
+                      animation: mounted ? `cardIn 0.35s ease both ${0.1 + i * 0.05}s` : "none",
+                    }}
+                    onClick={() => handleSelectDeck(deck)}
+                  >
+                    {renamingId === deck.id ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                        className="flex-1 bg-transparent text-xs text-[#1e3a6e] font-serif outline-none min-w-0"
+                        style={{ borderBottom: "1px solid #c9a84c" }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="flex-1 font-serif text-xs text-[#1e3a6e] truncate">{deck.name}</span>
+                    )}
+
+                    {/* Valid check */}
+                    {isValid && (
+                      <Check className="size-3 shrink-0 text-[#4ade80]" />
+                    )}
+
+                    {/* Actions (hover) */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button
+                        onClick={e => { e.stopPropagation(); setRenamingId(deck.id); setRenameValue(deck.name); }}
+                        className="cursor-pointer transition-colors hover:text-[#1e3a6e]"
+                        style={{ color: "#8b7d6b" }}
+                      >
+                        <Edit2 className="size-3" />
+                      </button>
+                      {decks.length > 1 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDeleteDeck(deck.id); }}
+                          className="cursor-pointer transition-colors hover:text-red-500"
+                          style={{ color: "#f87171" }}
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    {isActive && !renamingId && (
+                      <Star className="size-3 text-[#b8860b] shrink-0 fill-current opacity-0 group-hover:opacity-0" style={{ opacity: 1 }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* ── Centre: Board ────────────────────────── */}
+          <main
+            className="flex-1 flex flex-col gap-2 p-3 sm:p-4 overflow-y-auto min-w-0"
+            style={{ animation: mounted ? "fadeIn 0.4s ease both 0.1s" : "none" }}
+          >
+            {/* Deck name + actions */}
+            <div className="flex items-center justify-between shrink-0 gap-3">
+              <div className="flex flex-col min-w-0">
+                <h2 className="font-serif font-bold text-base text-[#1e3a6e] truncate">
+                  {editingDeck?.name ?? "—"}
+                </h2>
+                <p className="text-[10px] text-[#8b7d6b] mt-0.5">
+                  {selectedDef
+                    ? `Placing ${selectedDef.name} → click zone`
+                    : "Select a piece → click your zone (bottom rows)"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Count pill */}
                 <div
-                  key={err}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px]"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full"
                   style={{
-                    background: "rgba(248,113,113,0.1)",
-                    color: "#f87171",
-                    border: "1px solid rgba(248,113,113,0.25)",
+                    background: canPlay ? "rgba(74,222,128,0.12)" : "rgba(201,168,76,0.1)",
+                    border: `1px solid ${canPlay ? "rgba(74,222,128,0.4)" : "rgba(201,168,76,0.3)"}`,
                   }}
                 >
-                  ⚠ {err}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {canPlay && (
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] shrink-0"
-              style={{
-                background: "rgba(74,222,128,0.1)",
-                color: "#4ade80",
-                border: "1px solid rgba(74,222,128,0.25)",
-              }}
-            >
-              ✓ Deck ready — hit Play!
-            </div>
-          )}
-
-          {/* Board */}
-          <div className="flex-1 flex items-center justify-center min-h-0">
-            <div className="w-full max-w-sm sm:max-w-md lg:max-w-lg xl:max-w-xl">
-              {editingDeck ? (
-                <BoardPreview
-                  slots={editingDeck.slots}
-                  selectedDef={selectedDef}
-                  onTileClick={handleTileClick}
-                />
-              ) : (
-                <div className="aspect-square flex items-center justify-center rounded-xl border border-dashed border-[#c9a84c40]">
-                  <p className="text-sm text-[#8b7d6b] italic font-serif">
-                    Select or create a deck
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="flex items-center gap-4 shrink-0 flex-wrap">
-            {[
-              { color: "rgba(74,222,128,0.15)",  border: "rgba(74,222,128,0.4)", label: "Your zone" },
-              { color: "rgba(201,168,76,0.2)",   border: "#c9a84c60",            label: "Piece placed" },
-            ].map(({ color, border, label }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-sm border" style={{ background: color, borderColor: border }} />
-                <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">{label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Mobile piece picker */}
-          <div className="lg:hidden flex flex-col gap-2 mt-1">
-            <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">Select Piece</span>
-            <div className="grid grid-cols-2 gap-1.5">
-              {allDefs.map(def => (
-                <PieceCard
-                  key={def.typeId}
-                  def={def}
-                  selected={selectedDef?.typeId === def.typeId}
-                  count={defCountMap.get(def.typeId) ?? 0}
-                  onClick={() => setSelectedDef(prev =>
-                    prev?.typeId === def.typeId ? null : def
+                  {canPlay
+                    ? <Check className="size-3 text-[#4ade80]" />
+                    : <span className="text-[9px] font-bold" style={{ color: "#b8860b" }}>{count}/{MAX_PIECES}</span>
+                  }
+                  {canPlay && (
+                    <span className="text-[9px] font-semibold text-[#4ade80]">Ready</span>
                   )}
-                />
-              ))}
+                </div>
+
+                <button
+                  onClick={handleClearDeck}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs cursor-pointer transition-all hover:scale-[1.02]"
+                  style={{
+                    border: "1px solid rgba(248,113,113,0.3)",
+                    color: "#f87171",
+                    background: "rgba(248,113,113,0.05)",
+                  }}
+                >
+                  <Trash2 className="size-3" />
+                  <span className="hidden sm:block">Clear</span>
+                </button>
+              </div>
             </div>
-          </div>
-        </main>
 
-        {/* ── Right: Piece Roster ──────────────────────────── */}
-        <aside
-          className="hidden lg:flex flex-col gap-3 w-60 xl:w-68 shrink-0 p-3 border-l border-[#c9a84c30] overflow-y-auto"
-          style={{ background: "rgba(253,251,247,0.7)" }}
-        >
-          <span className="text-[9px] uppercase tracking-widest text-[#8b7d6b]">
-            Piece Roster · click to select
-          </span>
-
-          <div className="flex flex-col gap-1.5">
-            {allDefs.map(def => (
-              <PieceCard
-                key={def.typeId}
-                def={def}
-                selected={selectedDef?.typeId === def.typeId}
-                count={defCountMap.get(def.typeId) ?? 0}
-                onClick={() => setSelectedDef(prev =>
-                  prev?.typeId === def.typeId ? null : def
-                )}
-              />
-            ))}
-          </div>
-
-          {/* Selected piece detail */}
-          {selectedDef != null && (
-            <div
-              className="rounded-lg border px-3 py-3 flex flex-col gap-2 mt-1"
-              style={{ background: "rgba(201,168,76,0.06)", borderColor: "#c9a84c40" }}
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-2xl leading-none">{selectedDef.symbol}</span>
-                <div>
-                  <p className="font-serif font-bold text-sm text-[#1e3a6e]">{selectedDef.name}</p>
-                  <p
-                    className="text-[9px] uppercase tracking-wider"
-                    style={{ color: FACTION_COLOR[selectedDef.faction] }}
+            {/* Validation errors */}
+            {deckErrors.length > 0 && (
+              <div className="flex flex-col gap-1 shrink-0">
+                {deckErrors.map(err => (
+                  <div
+                    key={err}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px]"
+                    style={{
+                      background: "rgba(248,113,113,0.08)",
+                      border: "1px solid rgba(248,113,113,0.22)",
+                      color: "#f87171",
+                    }}
                   >
-                    {selectedDef.faction}
-                  </p>
-                </div>
+                    <AlertCircle className="size-3 shrink-0" />
+                    {err}
+                  </div>
+                ))}
               </div>
-              <p className="text-[10px] text-[#8b7d6b] leading-relaxed">{selectedDef.description}</p>
-              <div className="flex items-center gap-3 text-[10px]">
-                <span className="flex items-center gap-1 text-[#4ade80]">
-                  <Heart className="size-3" />{selectedDef.maxHp > 0 ? selectedDef.maxHp : "∞"}
-                </span>
-                <span className="flex items-center gap-1 text-[#f97316]">
-                  <Swords className="size-3" />{selectedDef.attack}
-                </span>
-                <span className="flex items-center gap-1 text-[#60a5fa]">
-                  <Shield className="size-3" />{selectedDef.defense}
-                </span>
+            )}
+
+            {/* Board */}
+            <div className="flex-1 flex items-center justify-center min-h-0">
+              <div className="w-full max-w-[min(100%,calc(100vh-200px))]">
+                {editingDeck ? (
+                  <BoardPreview
+                    slots={editingDeck.slots}
+                    selectedDef={selectedDef}
+                    onTileClick={handleTileClick}
+                  />
+                ) : (
+                  <div
+                    className="aspect-square flex items-center justify-center rounded-xl border border-dashed"
+                    style={{ borderColor: "rgba(201,168,76,0.3)" }}
+                  >
+                    <p className="text-sm text-[#8b7d6b] italic font-serif">Select or create a deck</p>
+                  </div>
+                )}
               </div>
-              {selectedDef.abilities.map(ab => (
-                <div key={ab.id} className="flex flex-col gap-0.5 border-t border-[#c9a84c20] pt-2">
-                  <span className="text-[10px] font-semibold text-[#1e3a6e]">{ab.name}</span>
-                  <span className="text-[9px] text-[#8b7d6b]">{ab.description}</span>
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 shrink-0 flex-wrap">
+              {[
+                { color: "rgba(74,222,128,0.18)",  border: "rgba(74,222,128,0.4)", label: "Deploy zone" },
+                { color: "rgba(201,168,76,0.22)",  border: "#c9a84c55",            label: "Piece placed" },
+              ].map(({ color, border, label }) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <div className="w-3.5 h-3.5 rounded-sm border" style={{ background: color, borderColor: border }} />
+                  <span className="text-[9px] uppercase tracking-wider text-[#8b7d6b]">{label}</span>
                 </div>
               ))}
-              {REQUIRED_PIECES[selectedDef.typeId] && (
-                <p className="text-[9px] text-[#f87171] italic">
-                  Required — exactly 1 per deck
-                </p>
-              )}
-              <p className="text-[9px] text-[#b8860b] italic">
-                Click a highlighted tile to place
-              </p>
             </div>
-          )}
-        </aside>
+
+            {/* Mobile piece picker */}
+            <div className="lg:hidden flex flex-col gap-2 mt-1">
+              <OrnDivider />
+              <div className="grid grid-cols-2 gap-1.5">
+                {allDefs.map(def => (
+                  <PieceCard
+                    key={def.typeId}
+                    def={def}
+                    selected={selectedDef?.typeId === def.typeId}
+                    count={defCountMap.get(def.typeId) ?? 0}
+                    onClick={() => setSelectedDef(p => p?.typeId === def.typeId ? null : def)}
+                  />
+                ))}
+              </div>
+            </div>
+          </main>
+
+          {/* ── Right: Piece Roster ──────────────────── */}
+          <aside
+            className="hidden lg:flex flex-col w-60 xl:w-64 shrink-0 border-l overflow-hidden"
+            style={{
+              background: "rgba(253,251,247,0.6)",
+              borderColor: "rgba(201,168,76,0.2)",
+              animation: mounted ? "slideDown 0.4s ease both 0.1s" : "none",
+            }}
+          >
+            {/* Roster header */}
+            <div
+              className="px-3 py-3 shrink-0"
+              style={{ borderBottom: "1px solid rgba(201,168,76,0.15)" }}
+            >
+              <span className="font-serif text-[10px] font-semibold uppercase tracking-wider text-[#8b7d6b]">
+                Piece Roster
+              </span>
+            </div>
+
+            {/* Piece list */}
+            <div className="flex flex-col gap-1.5 p-2 overflow-y-auto flex-1">
+              {allDefs.map((def, i) => (
+                <div
+                  key={def.typeId}
+                  style={{ animation: mounted ? `cardIn 0.3s ease both ${0.15 + i * 0.025}s` : "none" }}
+                >
+                  <PieceCard
+                    def={def}
+                    selected={selectedDef?.typeId === def.typeId}
+                    count={defCountMap.get(def.typeId) ?? 0}
+                    onClick={() => setSelectedDef(p => p?.typeId === def.typeId ? null : def)}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Selected piece detail */}
+            {selectedDef != null && (
+              <div
+                className="shrink-0 p-3 flex flex-col gap-2"
+                style={{
+                  borderTop: "1px solid rgba(201,168,76,0.2)",
+                  background: "rgba(201,168,76,0.04)",
+                  animation: "slideUp 0.22s ease both",
+                }}
+              >
+                <OrnDivider />
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+                    style={{
+                      background: FACTION_BG[selectedDef.faction] ?? "rgba(201,168,76,0.08)",
+                      border: `1.5px solid ${FACTION_COLOR[selectedDef.faction] ?? "#c9a84c"}40`,
+                    }}
+                  >
+                    {selectedDef.symbol}
+                  </div>
+                  <div>
+                    <p className="font-serif font-bold text-sm text-[#1e3a6e]">{selectedDef.name}</p>
+                    <p
+                      className="text-[9px] uppercase tracking-wider"
+                      style={{ color: FACTION_COLOR[selectedDef.faction] }}
+                    >
+                      {selectedDef.faction} · {TIER_LABEL[selectedDef.tier]}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-[#8b7d6b] leading-relaxed">{selectedDef.description}</p>
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="flex items-center gap-1 text-[#4ade80]">
+                    <Heart className="size-3" />{selectedDef.maxHp > 0 ? selectedDef.maxHp : "∞"}
+                  </span>
+                  <span className="flex items-center gap-1 text-[#f97316]">
+                    <Swords className="size-3" />{selectedDef.attack}
+                  </span>
+                  <span className="flex items-center gap-1 text-[#60a5fa]">
+                    <Shield className="size-3" />{selectedDef.defense}
+                  </span>
+                </div>
+                {selectedDef.abilities.map(ab => (
+                  <div
+                    key={ab.id}
+                    className="px-2.5 py-2 rounded-lg"
+                    style={{ background: "rgba(155,109,224,0.07)", border: "1px solid rgba(155,109,224,0.22)" }}
+                  >
+                    <p className="text-[10px] font-semibold text-[#1e3a6e]">{ab.name}</p>
+                    <p className="text-[9px] text-[#8b7d6b] mt-0.5">{ab.description}</p>
+                  </div>
+                ))}
+                {REQUIRED_PIECES[selectedDef.typeId] && (
+                  <p className="text-[9px] italic" style={{ color: "#f87171" }}>
+                    Required — exactly 1 per deck
+                  </p>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
