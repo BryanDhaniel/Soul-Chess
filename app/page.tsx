@@ -1,5 +1,8 @@
+// ============================================================
+// SOULCHESS — Main Menu (Refined + Animated)
+// ============================================================
 'use client';
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import {
   BookOpen, ChevronRight, Crown, Feather, Gamepad2,
@@ -8,124 +11,552 @@ import {
 import { JSX } from "react";
 import { useRouter } from "next/navigation";
 
-export default function App(): JSX.Element {
-  const router = useRouter();
+// ─── Keyframes ────────────────────────────────────────────────
+const STYLES = `
+  @keyframes sidebarIn  {
+    from { opacity: 0; transform: translateX(-28px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideDown  {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideUp    {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn     {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes scaleUp    {
+    from { opacity: 0; transform: scale(0.88); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes navItemIn  {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes shimmerBar {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 0.6; }
+  }
+  @keyframes floatY     {
+    0%, 100% { transform: translateY(0px);   }
+    50%       { transform: translateY(-10px); }
+  }
+  @keyframes glowBreath {
+    0%, 100% { opacity: 0.28; transform: scale(1);    }
+    50%       { opacity: 0.5;  transform: scale(1.06); }
+  }
+  @keyframes profileIn  {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes activeBarPulse {
+    0%, 100% { box-shadow: 0 0 6px #c9a84c; }
+    50%       { box-shadow: 0 0 14px #c9a84c, 0 0 28px #c9a84c60; }
+  }
+  @keyframes ornDivider {
+    from { opacity: 0; transform: scaleX(0.4); }
+    to   { opacity: 0.6; transform: scaleX(1); }
+  }
+`;
+
+// ─── Ornate divider ───────────────────────────────────────────
+function OrnDivider({ delay = "0s" }: { delay?: string }) {
+  return (
+    <div
+      className="flex items-center w-full"
+      style={{
+        animation: `ornDivider 0.6s ease both ${delay}`,
+        transformOrigin: "center",
+      }}
+    >
+      <div className="h-px flex-1" style={{ background: "linear-gradient(90deg,transparent,#c9a84c)" }} />
+      <div
+        style={{
+          width: 6, height: 6,
+          transform: "rotate(45deg)",
+          border: "1px solid #c9a84c",
+          background: "#fdfbf7",
+          margin: "0 8px",
+        }}
+      />
+      <div className="h-px flex-1" style={{ background: "linear-gradient(90deg,#c9a84c,transparent)" }} />
+    </div>
+  );
+}
+
+// ─── Nav Item ─────────────────────────────────────────────────
+function NavItem({
+  icon, label, active, onClick, delay,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+  delay: string;
+}) {
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <div className="bg-[#f5f0e8] text-[#2c2c2c] w-screen h-screen overflow-hidden">
-      <div className="flex w-full h-full">
-        <aside
-          className="hidden md:flex flex-col justify-between w-64 p-4 lg:p-6 shrink-0 relative z-20 border-r border-[#c9a84c]/40"
-          style={{ background: "linear-gradient(180deg, #fdfbf7 0%, #f5f0e8 100%)", boxShadow: "4px 0 24px rgba(201,168,76,0.05)" }}
-        >
-          <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{ backgroundImage: "repeating-linear-gradient(45deg, #1e3a6e, #1e3a6e 1px, transparent 1px, transparent 4px)" }} />
-          <div className="flex flex-col gap-6 lg:gap-8 relative z-10 pt-2">
-            <div className="flex flex-col items-center gap-3">
-              <div className="relative flex justify-center items-center w-14 h-14 shrink-0 rounded-full border border-[#c9a84c] bg-linear-to-br from-[#fdfbf7] to-[#ece4d3]" style={{ boxShadow: "0 4px 12px rgba(201,168,76,0.15), inset 0 0 10px rgba(255,255,255,0.8)" }}>
-                <Crown className="size-6 text-[#b8860b] drop-shadow-sm" />
-                <div className="absolute -inset-1 border border-[#c9a84c] rounded-full opacity-40 border-dashed" />
-              </div>
-              <div className="flex flex-col items-center text-center">
-                <span className="font-serif font-bold text-2xl tracking-[0.15em] text-[#1e3a6e] uppercase">SoulChess</span>
-                <span className="uppercase text-[9px] tracking-[0.4em] text-[#8b7d6b] mt-1 font-medium">Anno MMXXV</span>
-              </div>
-            </div>
-            <div className="flex items-center w-full opacity-60">
-              <div className="h-px flex-1 bg-linear-to-r from-transparent to-[#c9a84c]" />
-              <div className="w-1.5 h-1.5 rotate-45 border border-[#c9a84c] mx-2 bg-[#fdfbf7]" />
-              <div className="h-px flex-1 bg-linear-to-l from-transparent to-[#c9a84c]" />
-            </div>
-            <nav className="flex flex-col gap-3">
-              <span className="font-serif italic text-[11px] tracking-widest mb-1 text-[#8b7d6b] text-center">~ Tome of Tactics ~</span>
-              <button onClick={() => router.push("/play/local")} className="relative group flex justify-start items-center gap-4 w-full h-12 px-4 cursor-pointer transition-all overflow-hidden border border-[#c9a84c]/40 bg-linear-to-r from-[#c9a84c]/10 to-transparent">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c9a84c] shadow-[0_0_8px_#c9a84c]" />
-                <Gamepad2 className="size-5 shrink-0 text-[#1e3a6e]" />
-                <span className="font-serif font-semibold tracking-widest text-sm text-[#1e3a6e]">PLAY</span>
-                <ChevronRight className="size-4 ml-auto shrink-0 text-[#c9a84c]" />
-              </button>
-              <button onClick={() => router.push("/decks")} className="group flex justify-start items-center gap-4 w-full h-12 px-4 border border-transparent hover:border-[#c9a84c]/30 hover:bg-[#c9a84c]/5 transition-all cursor-pointer">
-                <Layers className="size-5 shrink-0 text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors" />
-                <span className="font-serif tracking-widest text-sm text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors">DECKS</span>
-              </button>
-              <button className="group flex justify-start items-center gap-4 w-full h-12 px-4 border border-transparent hover:border-[#c9a84c]/30 hover:bg-[#c9a84c]/5 transition-all cursor-pointer">
-                <Settings className="size-5 shrink-0 text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors" />
-                <span className="font-serif tracking-widest text-sm text-[#8b7d6b] group-hover:text-[#1e3a6e] transition-colors">SETTINGS</span>
-              </button>
-            </nav>
-          </div>
-          <div className="flex flex-col gap-4 relative z-10">
-            <div className="flex items-center w-full opacity-60">
-              <div className="h-px flex-1 bg-linear-to-r from-transparent to-[#c9a84c]" />
-              <div className="w-1.5 h-1.5 rotate-45 border border-[#c9a84c] mx-2 bg-[#fdfbf7]" />
-              <div className="h-px flex-1 bg-linear-to-l from-transparent to-[#c9a84c]" />
-            </div>
-            <div className="flex items-center gap-3 bg-[#c9a84c]/5 p-2.5 border border-[#c9a84c]/20 hover:border-[#c9a84c]/50 hover:bg-[#c9a84c]/10 transition-colors cursor-pointer group">
-              <div className="relative flex items-center justify-center w-11 h-11 shrink-0 bg-linear-to-br from-[#1e3a6e] to-[#2a4a85] border border-[#c9a84c] shadow-sm">
-                <span className="font-serif text-[#fff4c2] text-sm font-bold">AR</span>
-                <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 rotate-45 bg-[#b8860b] border border-[#fdfbf7] flex items-center justify-center shadow-md">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#fff4c2] animate-pulse" />
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative flex items-center gap-4 w-full h-12 px-4 overflow-hidden cursor-pointer"
+      style={{
+        background: active
+          ? "linear-gradient(90deg,rgba(201,168,76,0.12) 0%,transparent 100%)"
+          : hovered
+            ? "rgba(201,168,76,0.05)"
+            : "transparent",
+        border: `1px solid ${active ? "rgba(201,168,76,0.35)" : hovered ? "rgba(201,168,76,0.2)" : "transparent"}`,
+        borderRadius: 8,
+        transition: "background 0.2s ease, border-color 0.2s ease",
+        animation: `navItemIn 0.4s ease both ${delay}`,
+      }}
+    >
+      {/* Active left bar */}
+      {active && (
+        <div
+          className="absolute left-0 top-2 bottom-2 w-0.75 rounded-r"
+          style={{
+            background: "#c9a84c",
+            animation: "activeBarPulse 2.5s ease infinite",
+          }}
+        />
+      )}
+
+      {/* Icon */}
+      <span
+        style={{
+          color: active ? "#1e3a6e" : hovered ? "#1e3a6e" : "#8b7d6b",
+          transition: "color 0.2s ease",
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        {icon}
+      </span>
+
+      {/* Label */}
+      <span
+        className="font-serif font-semibold tracking-widest text-sm"
+        style={{
+          color: active ? "#1e3a6e" : hovered ? "#1e3a6e" : "#8b7d6b",
+          transition: "color 0.2s ease",
+        }}
+      >
+        {label}
+      </span>
+
+      {/* Chevron for active */}
+      {active && (
+        <ChevronRight
+          className="size-4 ml-auto shrink-0"
+          style={{ color: "#c9a84c" }}
+        />
+      )}
+    </button>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────
+export default function App(): JSX.Element {
+  const router  = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 40);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <>
+      <style>{STYLES}</style>
+      <div className="bg-[#f5f0e8] text-[#2c2c2c] w-screen h-screen overflow-hidden">
+        <div className="flex w-full h-full">
+
+          {/* ═══════════════════════════════════════════
+              SIDEBAR
+          ═══════════════════════════════════════════ */}
+          <aside
+            className="hidden md:flex flex-col justify-between w-64 shrink-0 relative z-20"
+            style={{
+              background: "linear-gradient(180deg,#fdfbf7 0%,#f5f0e8 100%)",
+              borderRight: "1px solid rgba(201,168,76,0.3)",
+              boxShadow: "4px 0 32px rgba(201,168,76,0.06), 2px 0 8px rgba(0,0,0,0.04)",
+              animation: mounted ? "sidebarIn 0.5s cubic-bezier(0.22,1,0.36,1) both" : "none",
+            }}
+          >
+            {/* Subtle diagonal texture */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage: "repeating-linear-gradient(45deg,#1e3a6e,#1e3a6e 1px,transparent 1px,transparent 5px)",
+                opacity: 0.018,
+              }}
+            />
+
+            {/* ── TOP SECTION ── */}
+            <div className="flex flex-col gap-6 relative z-10 p-5 pt-7">
+
+              {/* Logo */}
+              <div
+                className="flex flex-col items-center gap-3"
+                style={{ animation: mounted ? "fadeIn 0.5s ease both 0.18s" : "none" }}
+              >
+                {/* Crown icon */}
+                <div className="relative">
+                  <div
+                    className="w-14 h-14 rounded-full flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg,#fdfbf7 0%,#ece4d3 100%)",
+                      border: "1.5px solid rgba(201,168,76,0.6)",
+                      boxShadow: "0 4px 16px rgba(201,168,76,0.18), inset 0 1px 0 rgba(255,255,255,0.9)",
+                    }}
+                  >
+                    <Crown className="size-6 text-[#b8860b]" style={{ filter: "drop-shadow(0 1px 3px rgba(184,134,11,0.3))" }} />
+                  </div>
+                  {/* Dashed orbit ring */}
+                  <div
+                    className="absolute rounded-full pointer-events-none"
+                    style={{
+                      inset: -5,
+                      border: "1px dashed rgba(201,168,76,0.4)",
+                      borderRadius: "50%",
+                    }}
+                  />
+                </div>
+
+                {/* Title */}
+                <div className="flex flex-col items-center text-center gap-0.5">
+                  <span
+                    className="font-serif font-bold text-2xl tracking-[0.15em] text-[#1e3a6e] uppercase"
+                    style={{ textShadow: "0 1px 0 rgba(255,255,255,0.8)" }}
+                  >
+                    SoulChess
+                  </span>
+                  <span
+                    className="uppercase font-medium"
+                    style={{ fontSize: 9, letterSpacing: "0.42em", color: "#8b7d6b" }}
+                  >
+                    Anno MMXXV
+                  </span>
                 </div>
               </div>
-              <div className="flex flex-col overflow-hidden">
-                <span className="font-serif font-semibold text-sm text-[#1e3a6e] truncate">Archmage Rowan</span>
-                <span className="text-[10px] font-medium uppercase tracking-wider flex items-center gap-1 text-[#b8860b] whitespace-nowrap mt-0.5">
-                  <Sparkles className="size-3 shrink-0" />Grandmaster · 2410
+
+              <OrnDivider delay={mounted ? "0.28s" : "99s"} />
+
+              {/* Navigation */}
+              <nav className="flex flex-col gap-1.5">
+                <span
+                  className="font-serif italic text-center mb-1"
+                  style={{
+                    fontSize: 11, letterSpacing: "0.12em", color: "#8b7d6b",
+                    animation: mounted ? "fadeIn 0.4s ease both 0.32s" : "none",
+                  }}
+                >
+                  ~ Tome of Tactics ~
+                </span>
+
+                <NavItem
+                  icon={<Gamepad2 className="size-5" />}
+                  label="PLAY"
+                  active
+                  onClick={() => router.push("/play/local")}
+                  delay={mounted ? "0.38s" : "99s"}
+                />
+                <NavItem
+                  icon={<Layers className="size-5" />}
+                  label="DECKS"
+                  onClick={() => router.push("/decks")}
+                  delay={mounted ? "0.44s" : "99s"}
+                />
+                <NavItem
+                  icon={<Settings className="size-5" />}
+                  label="SETTINGS"
+                  delay={mounted ? "0.5s" : "99s"}
+                />
+              </nav>
+            </div>
+
+            {/* ── BOTTOM SECTION ── */}
+            <div
+              className="flex flex-col gap-4 relative z-10 p-5 pb-6"
+              style={{ animation: mounted ? "profileIn 0.5s ease both 0.5s" : "none" }}
+            >
+              <OrnDivider />
+
+              {/* Profile card */}
+              <div
+                className="flex items-center gap-3 p-3 cursor-pointer group transition-all"
+                style={{
+                  background: "rgba(201,168,76,0.05)",
+                  border: "1px solid rgba(201,168,76,0.2)",
+                  borderRadius: 10,
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLDivElement).style.background = "rgba(201,168,76,0.1)";
+                  (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(201,168,76,0.45)";
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLDivElement).style.background = "rgba(201,168,76,0.05)";
+                  (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(201,168,76,0.2)";
+                }}
+              >
+                {/* Avatar */}
+                <div className="relative shrink-0">
+                  <div
+                    className="w-11 h-11 flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg,#1e3a6e 0%,#2a4a85 100%)",
+                      border: "1.5px solid #c9a84c",
+                      borderRadius: 8,
+                      boxShadow: "0 2px 8px rgba(30,58,110,0.25)",
+                    }}
+                  >
+                    <span className="font-serif text-[#fff4c2] text-sm font-bold">AR</span>
+                  </div>
+                  {/* Rank gem */}
+                  <div
+                    className="absolute -bottom-1.5 -right-1.5 w-4 h-4 flex items-center justify-center"
+                    style={{
+                      background: "#b8860b",
+                      border: "1.5px solid #fdfbf7",
+                      transform: "rotate(45deg)",
+                      boxShadow: "0 1px 4px rgba(184,134,11,0.4)",
+                    }}
+                  >
+                    <div
+                      className="w-1.5 h-1.5 rounded-full animate-pulse"
+                      style={{ background: "#fff4c2", transform: "rotate(-45deg)" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="flex flex-col overflow-hidden">
+                  <span className="font-serif font-semibold text-sm text-[#1e3a6e] truncate">
+                    Archmage Rowan
+                  </span>
+                  <span
+                    className="flex items-center gap-1 font-medium uppercase truncate"
+                    style={{ fontSize: 10, letterSpacing: "0.08em", color: "#b8860b" }}
+                  >
+                    <Sparkles className="size-3 shrink-0" />
+                    Grandmaster · 2410
+                  </span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* ═══════════════════════════════════════════
+              MAIN CONTENT
+          ═══════════════════════════════════════════ */}
+          <main
+            className="relative flex-1 flex flex-col overflow-hidden"
+            style={{
+              background: "radial-gradient(ellipse at 50% -10%,#fff4c2 0%,#f5f0e8 42%,#ece4d3 100%)",
+            }}
+          >
+            {/* Chess pattern */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                backgroundImage: "repeating-conic-gradient(#2c2c2c 0deg 90deg,transparent 90deg 180deg)",
+                backgroundPosition: "center",
+                backgroundSize: "72px 72px",
+                maskImage: "radial-gradient(ellipse at center,black 0%,transparent 68%)",
+                WebkitMaskImage: "radial-gradient(ellipse at center,black 0%,transparent 68%)",
+                opacity: 0.055,
+              }}
+            />
+
+            {/* Top bar */}
+            <div
+              className="absolute inset-x-6 lg:inset-x-10 top-5 lg:top-7 flex items-center justify-between z-10"
+              style={{ animation: mounted ? "slideDown 0.4s ease both 0.1s" : "none" }}
+            >
+              <div className="flex items-center gap-2">
+                <Sun className="size-3.5 text-[#b8860b]" />
+                <span
+                  className="uppercase"
+                  style={{ fontSize: 10, letterSpacing: "0.32em", color: "#8b7d6b" }}
+                >
+                  Hall of the Arcane Tacticians
                 </span>
               </div>
             </div>
-          </div>
-        </aside>
 
-        <main className="relative p-6 lg:p-12 flex-1 flex flex-col overflow-hidden" style={{ background: "radial-gradient(ellipse at top, #fff4c2 0%, #f5f0e8 45%, #ece4d3 100%)" }}>
-          <div className="pointer-events-none opacity-[0.08] absolute inset-0" style={{ backgroundImage: "repeating-conic-gradient(#2c2c2c 0deg 90deg, transparent 90deg 180deg)", backgroundPosition: "center", backgroundSize: "80px 80px", maskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)", WebkitMaskImage: "radial-gradient(ellipse at center, black 0%, transparent 70%)" }} />
-          <div className="z-10 flex absolute inset-x-6 lg:inset-x-12 top-6 lg:top-8 justify-between items-center sm:flex">
-            <div className="flex items-center gap-2">
-              <Sun className="size-4 text-[#b8860b]" />
-              <span className="uppercase text-[10px] lg:text-xs leading-4 tracking-[4px] text-[#8b7d6b]">Hall of the Arcane Tacticians</span>
-            </div>
-          </div>
-          <div className="relative z-10 flex flex-col justify-center items-center h-full min-h-0 py-8">
-            <div className="flex mb-3 lg:mb-4 items-center gap-2 lg:gap-4">
-              <div className="w-10 lg:w-16 h-px" style={{ background: "linear-gradient(90deg, transparent, #c9a84c)" }} />
-              <Sparkle className="size-3 text-[#b8860b]" />
-              <span className="font-medium uppercase text-[9px] lg:text-[10px] leading-4 tracking-[4px] lg:tracking-[6px] text-[#1e3a6e] whitespace-nowrap">Welcome, Archmage</span>
-              <Sparkle className="size-3 text-[#b8860b]" />
-              <div className="w-10 lg:w-16 h-px" style={{ background: "linear-gradient(90deg, #c9a84c, transparent)" }} />
-            </div>
-            <h1 className="font-light text-center text-4xl md:text-5xl lg:text-6xl leading-tight lg:leading-15 tracking-[2.4px] text-[#1e3a6e] shrink-0" style={{ fontFamily: "serif" }}>
-              SOUL<span style={{ background: "linear-gradient(135deg, #c9a84c 0%, #b8860b 50%, #c9a84c 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>CHESS</span>
-            </h1>
-            <p className="uppercase text-[9px] lg:text-[11px] leading-5 tracking-[2px] lg:tracking-[4px] mt-1 lg:mt-2 text-[#8b7d6b] text-center">· A Game of Mind, Magic &amp; Mastery ·</p>
-            <div className="relative mt-4 lg:mt-8 shrink min-h-0 flex justify-center items-center">
-              <div className="opacity-40 rounded-full absolute inset-0 lg:-inset-8 scale-150" style={{ background: "radial-gradient(circle, #fff4c2 0%, transparent 70%)" }} />
-              <Image alt="Chess King" className="relative object-contain w-auto h-[30vh] max-h-100 min-h-40" src="/images/piece2.png" width={400} height={400} style={{ filter: "drop-shadow(0 20px 40px rgba(30,58,110,0.25)) sepia(0.15)" }} />
-            </div>
-            <div className="flex mt-6 lg:mt-10 flex-col items-center gap-3 shrink-0 w-full max-w-lg">
-              <button onClick={() => router.push("/play/local")} className="font-medium uppercase flex items-center justify-center rounded-lg text-xs lg:text-sm leading-6 tracking-[3px] lg:tracking-[4px] border-2 border-[#fff4c2] px-8 lg:px-12 h-10 lg:h-12 text-[#faf6ed] cursor-pointer transition-opacity hover:opacity-90 w-full sm:w-auto" style={{ background: "linear-gradient(135deg, #c9a84c 0%, #b8860b 100%)", boxShadow: "0 8px 24px rgba(184,134,11,0.35), inset 0 1px 0 rgba(255,244,194,0.5)" }}>
-                <Play className="size-3 lg:size-4 fill-current mr-3" />Enter the Hall
-              </button>
-              <div className="flex flex-wrap justify-center mt-1 items-center gap-2 lg:gap-3 w-full">
-                <button className="bg-transparent flex items-center justify-center rounded-lg px-4 gap-2 h-9 lg:h-10 border border-[#c9a84c80] text-[#1e3a6e] cursor-pointer hover:bg-[#c9a84c10] transition-colors text-[11px] lg:text-xs flex-1 sm:flex-none whitespace-nowrap"><Swords className="size-3.5" />Ranked Duel</button>
-                <button className="bg-transparent flex items-center justify-center rounded-lg px-4 gap-2 h-9 lg:h-10 border border-[#c9a84c80] text-[#1e3a6e] cursor-pointer hover:bg-[#c9a84c10] transition-colors text-[11px] lg:text-xs flex-1 sm:flex-none whitespace-nowrap"><BookOpen className="size-3.5" />Campaign</button>
-                <button className="bg-transparent flex items-center justify-center rounded-lg px-4 gap-2 h-9 lg:h-10 border border-[#c9a84c80] text-[#1e3a6e] cursor-pointer hover:bg-[#c9a84c10] transition-colors text-[11px] lg:text-xs flex-1 sm:flex-none whitespace-nowrap"><Users className="size-3.5" />Play a Friend</button>
+            {/* Hero content */}
+            <div className="relative z-10 flex flex-col justify-center items-center h-full min-h-0 py-10 px-6">
+
+              {/* Welcome line */}
+              <div
+                className="flex items-center gap-3 mb-3"
+                style={{ animation: mounted ? "fadeIn 0.5s ease both 0.22s" : "none" }}
+              >
+                <div className="w-10 lg:w-14 h-px" style={{ background: "linear-gradient(90deg,transparent,#c9a84c)" }} />
+                <Sparkle className="size-3 text-[#b8860b]" />
+                <span
+                  className="font-medium uppercase whitespace-nowrap"
+                  style={{ fontSize: 10, letterSpacing: "0.48em", color: "#1e3a6e" }}
+                >
+                  Welcome, Archmage
+                </span>
+                <Sparkle className="size-3 text-[#b8860b]" />
+                <div className="w-10 lg:w-14 h-px" style={{ background: "linear-gradient(90deg,#c9a84c,transparent)" }} />
+              </div>
+
+              {/* Title */}
+              <h1
+                className="text-center font-light shrink-0"
+                style={{
+                  fontFamily: "serif",
+                  fontSize: "clamp(2.4rem, 6vw, 4rem)",
+                  lineHeight: 1.05,
+                  letterSpacing: "0.06em",
+                  color: "#1e3a6e",
+                  animation: mounted ? "slideDown 0.55s cubic-bezier(0.22,1,0.36,1) both 0.18s" : "none",
+                }}
+              >
+                SOUL
+                <span
+                  style={{
+                    background: "linear-gradient(135deg,#c9a84c 0%,#b8860b 50%,#c9a84c 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  CHESS
+                </span>
+              </h1>
+
+              {/* Subtitle */}
+              <p
+                className="uppercase text-center mt-2"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.3em",
+                  color: "#8b7d6b",
+                  animation: mounted ? "fadeIn 0.5s ease both 0.32s" : "none",
+                }}
+              >
+                · A Game of Mind, Magic &amp; Mastery ·
+              </p>
+
+              {/* Hero image */}
+              <div
+                className="relative mt-5 lg:mt-8 shrink min-h-0 flex justify-center items-center"
+                style={{ animation: mounted ? "scaleUp 0.6s ease both 0.26s" : "none" }}
+              >
+                {/* Breathing glow */}
+                <div
+                  className="absolute rounded-full"
+                  style={{
+                    inset: "-20%",
+                    background: "radial-gradient(circle,#fff4c2 0%,transparent 70%)",
+                    animation: "glowBreath 3.5s ease-in-out infinite",
+                  }}
+                />
+                <Image
+                  alt="Chess King"
+                  className="relative object-contain w-auto"
+                  src="/images/piece2.png"
+                  width={400}
+                  height={400}
+                  style={{
+                    height: "clamp(130px, 28vh, 380px)",
+                    filter: "drop-shadow(0 18px 36px rgba(30,58,110,0.22)) sepia(0.12)",
+                    animation: "floatY 4.5s ease-in-out infinite 0.8s",
+                  }}
+                />
+              </div>
+
+              {/* CTA */}
+              <div
+                className="flex flex-col items-center gap-3 mt-6 lg:mt-9 shrink-0 w-full max-w-md"
+                style={{ animation: mounted ? "slideUp 0.5s cubic-bezier(0.22,1,0.36,1) both 0.42s" : "none" }}
+              >
+                {/* Primary CTA */}
+                <button
+                  onClick={() => router.push("/play/local")}
+                  className="font-medium uppercase flex items-center justify-center w-full sm:w-auto px-10 h-11 lg:h-12 text-[#faf6ed] cursor-pointer transition-all hover:opacity-92 hover:scale-[1.02]"
+                  style={{
+                    fontFamily: "serif",
+                    fontSize: 12,
+                    letterSpacing: "0.32em",
+                    background: "linear-gradient(135deg,#c9a84c 0%,#b8860b 100%)",
+                    border: "1.5px solid rgba(255,244,194,0.5)",
+                    borderRadius: 10,
+                    boxShadow: "0 8px 24px rgba(184,134,11,0.3), inset 0 1px 0 rgba(255,244,194,0.4)",
+                  }}
+                >
+                  <Play className="size-3.5 fill-current mr-3" />
+                  Enter the Hall
+                </button>
+
+                {/* Secondary CTAs */}
+                <div className="flex flex-wrap justify-center gap-2 w-full">
+                  {[
+                    { icon: <Swords className="size-3.5" />, label: "Ranked Duel",  delay: "0.48s" },
+                    { icon: <BookOpen className="size-3.5" />, label: "Campaign",   delay: "0.54s" },
+                    { icon: <Users className="size-3.5" />, label: "Play a Friend", delay: "0.60s" },
+                  ].map(({ icon, label, delay }) => (
+                    <button
+                      key={label}
+                      className="flex items-center gap-2 px-4 h-9 flex-1 sm:flex-none whitespace-nowrap cursor-pointer transition-all hover:scale-[1.02]"
+                      style={{
+                        fontSize: 11,
+                        letterSpacing: "0.06em",
+                        color: "#1e3a6e",
+                        background: "rgba(253,251,247,0.5)",
+                        border: "1px solid rgba(201,168,76,0.45)",
+                        borderRadius: 8,
+                        backdropFilter: "blur(4px)",
+                        animation: mounted ? `slideUp 0.4s ease both ${delay}` : "none",
+                      }}
+                      onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(201,168,76,0.1)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(253,251,247,0.5)"}
+                    >
+                      {icon}{label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="z-10 flex absolute inset-x-6 lg:inset-x-12 bottom-6 lg:bottom-8 justify-between items-center">
-            <div className="text-[10px] lg:text-xs leading-4 items-center gap-2 text-[#8b7d6b] hidden sm:flex">
-              <Feather className="size-3 shrink-0" />
-              <span className="italic">&quot;The board is a battlefield of souls.&quot;</span>
-            </div>
-            <div className="text-[10px] lg:text-xs leading-4 flex items-center gap-4 text-[#8b7d6b] w-full sm:w-auto justify-center sm:justify-end">
-              <span>v 2.4.1</span>
-              <div className="flex items-center gap-1">
-                <div className="size-1.5 rounded-full bg-[#1e3a6e] shrink-0" />
-                <span>12,408 mages online</span>
+
+            {/* Bottom bar */}
+            <div
+              className="absolute inset-x-6 lg:inset-x-10 bottom-5 lg:bottom-7 flex justify-between items-center z-10"
+              style={{ animation: mounted ? "slideUp 0.4s ease both 0.58s" : "none" }}
+            >
+              <div className="hidden sm:flex items-center gap-2 text-[#8b7d6b]" style={{ fontSize: 10 }}>
+                <Feather className="size-3 shrink-0" />
+                <span className="italic">&quot;The board is a battlefield of souls.&quot;</span>
+              </div>
+              <div
+                className="flex items-center gap-4 w-full sm:w-auto justify-center sm:justify-end"
+                style={{ fontSize: 10, color: "#8b7d6b" }}
+              >
+                <span>v 2.4.1</span>
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className="size-1.5 rounded-full animate-pulse"
+                    style={{ background: "#1e3a6e" }}
+                  />
+                  <span>12,408 mages online</span>
+                </div>
               </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
