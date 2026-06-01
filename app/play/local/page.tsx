@@ -163,10 +163,16 @@ function PlayerCard({
 }
 
 // ─── Floating Piece Info Panel ────────────────────────────────
-function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
+function PiecePanel({ piece, isEnemy = false, onClose }: {
+  piece: Piece; isEnemy?: boolean; onClose: () => void;
+}) {
   const def   = getPieceDefinitionById(piece.definitionId);
   const fc    = FACTION_COLOR[def.faction] ?? "#c9a84c";
   const hpPct = piece.maxHp > 0 ? (piece.hp / piece.maxHp) * 100 : 100;
+  // Enemy pieces shown with a subtle red tint on the border
+  const borderColor = isEnemy ? "rgba(248,113,113,0.4)" : "rgba(201,168,76,0.35)";
+  const ownerColor  = isEnemy ? "#f87171" : "#4ade80";
+  const ownerLabel  = isEnemy ? "Enemy" : "Yours";
 
   return (
     <div
@@ -174,7 +180,7 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
       style={{
         top: 16, right: 16, width: 220,
         background: "rgba(253,251,247,0.97)",
-        border: "1px solid rgba(201,168,76,0.35)",
+        border: `1px solid ${borderColor}`,
         borderRadius: 14,
         boxShadow: "0 12px 40px rgba(30,58,110,0.12), 0 2px 8px rgba(0,0,0,0.06)",
         animation: "panelIn 0.28s cubic-bezier(0.22,1,0.36,1) both",
@@ -184,7 +190,7 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
       {/* Header */}
       <div
         className="flex items-center gap-2.5 px-4 py-3 shrink-0"
-        style={{ borderBottom: "1px solid rgba(201,168,76,0.18)" }}
+        style={{ borderBottom: `1px solid ${borderColor}` }}
       >
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0"
@@ -193,10 +199,28 @@ function PiecePanel({ piece, onClose }: { piece: Piece; onClose: () => void }) {
           {def.symbol}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-serif font-bold text-sm text-[#1e3a6e] leading-tight truncate">{def.name}</p>
-          <p className="text-[9px] uppercase tracking-wider mt-0.5 truncate" style={{ color: fc }}>
-            {def.faction} · T{def.tier}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-serif font-bold text-sm text-[#1e3a6e] leading-tight truncate">{def.name}</p>
+            <span
+              className="shrink-0 text-[7px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+              style={{ background: `${ownerColor}18`, color: ownerColor, border: `1px solid ${ownerColor}40` }}
+            >
+              {ownerLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <p className="text-[9px] uppercase tracking-wider truncate" style={{ color: fc }}>
+              {def.faction} · T{def.tier}
+            </p>
+            {isEnemy && (
+              <span
+                className="text-[7px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shrink-0"
+                style={{ background: "rgba(155,109,224,0.15)", color: "#9b6de0" }}
+              >
+                Enemy
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={onClose}
@@ -441,6 +465,7 @@ function BattleView({
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [viewingPiece, setViewingPiece] = useState<Piece | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 30);
@@ -462,25 +487,48 @@ function BattleView({
   const isCurrentAI = mode !== "pvp" && currentPlayer !== humanPlayer;
   const opponentPlayer: Player = humanPlayer === "white" ? "black" : "white";
 
-  // Auto-open panel when piece selected
+  // Auto-open panel when piece selected or viewed
   useEffect(() => {
-    if (selectedPiece) setPanelOpen(true);
+    if (selectedPiece) {
+      setViewingPiece(null); // clear enemy view when we select our own
+      setPanelOpen(true);
+    }
   }, [selectedPiece?.id]);
 
   const handleTileClick = useCallback((row: number, col: number, piece: Piece | null) => {
+    // Always allow viewing any piece info regardless of whose turn it is
+    if (piece && piece.owner !== currentPlayer) {
+      // Enemy piece clicked
+      if (!isAITurn && phase === "battle" && validAttackKeys.has(coordKey({ row, col }))) {
+        // Valid attack target — attack it
+        if (mode === "pvp" || currentPlayer === humanPlayer) {
+          attackPiece(piece.id);
+          return;
+        }
+      }
+      // Not a valid attack (or AI turn) — show enemy piece info
+      setViewingPiece(piece);
+      setPanelOpen(true);
+      return;
+    }
+
+    // Below: clicking own piece or empty tile
     if (isAITurn || phase !== "battle") return;
     if (mode !== "pvp" && currentPlayer !== humanPlayer) return;
+
     const coord = { row, col };
     const key   = coordKey(coord);
-    if (piece && validAttackKeys.has(key) && piece.owner !== currentPlayer) {
-      attackPiece(piece.id); return;
-    }
+
     if (validMoveKeys.has(key) && !piece) {
+      setViewingPiece(null);
       movePiece(coord); return;
     }
     if (piece && piece.owner === currentPlayer) {
+      setViewingPiece(null);
       piece.id === state.selectedPieceId ? deselect() : selectPiece(piece.id); return;
     }
+    // Empty non-move tile — clear everything
+    setViewingPiece(null);
     deselect();
   }, [
     isAITurn, phase, mode, currentPlayer, humanPlayer, state.selectedPieceId,
@@ -608,10 +656,15 @@ function BattleView({
           </div>
 
           {/* Floating piece info panel (absolute over board) */}
-          {selectedPiece && panelOpen && (
+          {panelOpen && (selectedPiece || viewingPiece) && (
             <PiecePanel
-              piece={selectedPiece}
-              onClose={() => { setPanelOpen(false); deselect(); }}
+              piece={(selectedPiece ?? viewingPiece)!}
+              isEnemy={!selectedPiece && viewingPiece !== null}
+              onClose={() => {
+                setPanelOpen(false);
+                setViewingPiece(null);
+                if (selectedPiece) deselect();
+              }}
             />
           )}
 
@@ -638,21 +691,21 @@ function BattleView({
             style={{ animation: mounted ? "fabPop 0.4s ease both 0.2s" : "none" }}
           >
             <button
-              onClick={() => selectedPiece && setPanelOpen(p => !p)}
+              onClick={() => (selectedPiece || viewingPiece) && setPanelOpen(p => !p)}
               className="flex items-center gap-2 px-3.5 py-2 cursor-pointer transition-all hover:scale-[1.03]"
               style={{
-                background: selectedPiece && panelOpen ? "rgba(201,168,76,0.15)" : "rgba(253,251,247,0.95)",
-                border: `1px solid ${selectedPiece && panelOpen ? "rgba(201,168,76,0.7)" : "rgba(201,168,76,0.3)"}`,
+                background: (selectedPiece || viewingPiece) && panelOpen ? "rgba(201,168,76,0.15)" : "rgba(253,251,247,0.95)",
+                border: `1px solid ${(selectedPiece || viewingPiece) && panelOpen ? "rgba(201,168,76,0.7)" : "rgba(201,168,76,0.3)"}`,
                 borderRadius: 20,
                 boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-                color: selectedPiece ? "#b8860b" : "#8b7d6b",
-                opacity: selectedPiece ? 1 : 0.5,
+                color: (selectedPiece || viewingPiece) ? "#b8860b" : "#8b7d6b",
+                opacity: (selectedPiece || viewingPiece) ? 1 : 0.5,
                 backdropFilter: "blur(8px)",
               }}
             >
               <Info className="size-3.5" />
               <span className="font-serif text-[10px] font-semibold uppercase tracking-wider">
-                {selectedPiece ? (panelOpen ? "Hide Info" : "Show Info") : "Piece Info"}
+                {(selectedPiece || viewingPiece) ? (panelOpen ? "Hide Info" : "Show Info") : "Piece Info"}
               </span>
             </button>
             <button
