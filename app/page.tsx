@@ -85,8 +85,6 @@ function OrnDivider({ delay = "0s" }: { delay?: string }) {
 }
 
 // ─── Nav Item ─────────────────────────────────────────────────
-// All items look the same by default.
-// On hover: gradient bg + left bar + chevron appear (same as old "active" style).
 function NavItem({
   icon, label, onClick, delay,
 }: {
