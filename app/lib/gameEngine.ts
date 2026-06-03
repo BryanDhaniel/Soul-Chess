@@ -230,7 +230,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       const record: TurnRecord = {
         turn: state.turnNumber, player: state.currentPlayer,
-        action: "move", pieceId: piece.id, from: piece.position, to: dest,
+        action: "move", pieceId: piece.id,
+        pieceDefinitionId: piece.definitionId,
+        from: piece.position, to: dest,
       };
       const newPieces = { ...state.pieces, [piece.id]: moved };
       const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
@@ -261,8 +263,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const record: TurnRecord = {
         turn: state.turnNumber, player: state.currentPlayer,
         action: "attack", pieceId: attacker.id,
+        pieceDefinitionId: attacker.definitionId,
         from: attacker.position, to: defender.position,
-        damage, capturedPieceId: isLethal ? defender.id : undefined,
+        damage,
+        capturedPieceId: isLethal ? defender.id : undefined,
+        capturedDefinitionId: isLethal ? defender.definitionId : undefined,
       };
       const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
       const winner = checkWin(next);

@@ -56,6 +56,124 @@ function OrnDivider() {
   );
 }
 
+// ─── Captured Pieces ─────────────────────────────────────────
+// Shows symbols of pieces captured BY this player (killed from opponent)
+function CapturedPieces({
+  capturedByPlayer, history, player,
+}: {
+  capturedByPlayer: Player;
+  history: import("../../types/game").TurnRecord[];
+  player: Player;
+}) {
+  const captured = history.filter(
+    r => r.player === capturedByPlayer && r.capturedDefinitionId
+  );
+  if (captured.length === 0) return null;
+
+  return (
+    <div className="flex flex-col items-center gap-1 w-full">
+      <div className="flex flex-wrap justify-center gap-0.5 max-w-[52px]">
+        {captured.map((r, i) => {
+          const def = getPieceDefinitionById(r.capturedDefinitionId!);
+          return (
+            <span
+              key={i}
+              title={def.name}
+              style={{
+                fontSize: 10,
+                lineHeight: 1,
+                opacity: 0.75,
+                filter: capturedByPlayer === "white"
+                  ? "none"
+                  : "invert(1) brightness(2)",
+              }}
+            >
+              {def.symbol}
+            </span>
+          );
+        })}
+      </div>
+      {captured.length > 0 && (
+        <span style={{ fontSize: 7, color: "#8b7d6b", letterSpacing: "0.05em" }}>
+          +{captured.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Move History Mini ────────────────────────────────────────
+function MoveHistoryMini({
+  history,
+}: {
+  history: import("../../types/game").TurnRecord[];
+}) {
+  // Show last 6 records max
+  const recent = [...history].reverse().slice(0, 6);
+  if (recent.length === 0) return null;
+
+  return (
+    <div
+      className="flex flex-col gap-0.5 w-full"
+      style={{ animation: "fadeIn 0.3s ease both" }}
+    >
+      {/* Label */}
+      <div className="flex items-center gap-1 justify-center mb-0.5">
+        <div style={{ width: 12, height: 1, background: "rgba(201,168,76,0.4)" }} />
+        <span style={{ fontSize: 7, color: "#8b7d6b", letterSpacing: "0.06em", textTransform: "uppercase" }}>Log</span>
+        <div style={{ width: 12, height: 1, background: "rgba(201,168,76,0.4)" }} />
+      </div>
+
+      {recent.map((r, i) => {
+        const isWhite = r.player === "white";
+        const color   = isWhite ? "#c9a84c" : "#9b6de0";
+        const def     = r.pieceDefinitionId
+          ? getPieceDefinitionById(r.pieceDefinitionId)
+          : null;
+        const capDef  = r.capturedDefinitionId
+          ? getPieceDefinitionById(r.capturedDefinitionId)
+          : null;
+
+        return (
+          <div
+            key={i}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded"
+            style={{
+              background: i === 0 ? `${color}10` : "transparent",
+              border: i === 0 ? `1px solid ${color}25` : "1px solid transparent",
+              opacity: 1 - i * 0.14,
+              transition: "all 0.2s ease",
+            }}
+          >
+            {/* Player dot */}
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
+            {/* Piece symbol */}
+            <span style={{ fontSize: 9, lineHeight: 1, filter: isWhite ? "none" : "invert(1) brightness(1.8)" }}>
+              {def?.symbol ?? "?"}
+            </span>
+            {/* Action */}
+            <span style={{ fontSize: 7, color: "#8b7d6b", letterSpacing: "0.03em", flexShrink: 0 }}>
+              {r.action === "attack" ? "×" : "→"}
+            </span>
+            {/* Captured symbol or destination */}
+            {capDef ? (
+              <span style={{ fontSize: 9, lineHeight: 1, color: "#f87171" }}>
+                {capDef.symbol}
+              </span>
+            ) : (
+              r.to && (
+                <span style={{ fontSize: 7, color: "#8b7d6b", fontFamily: "monospace" }}>
+                  {String.fromCharCode(65 + r.to.col)}{16 - r.to.row}
+                </span>
+              )
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Player Avatar Card ───────────────────────────────────────
 type GameMode = "ai-black" | "ai-white" | "pvp";
 
@@ -603,12 +721,15 @@ function BattleView({
           {/* Inner row: avatar sidebar + board */}
           <div className="flex items-center gap-3 h-full w-full max-w-fit">
 
-            {/* Avatar column — hidden on mobile */}
+            {/* ── Left column — hidden on mobile ── */}
             <div
-              className="hidden sm:flex flex-col justify-between items-center self-stretch py-2 shrink-0"
-              style={{ animation: mounted ? "avatarIn 0.45s ease both 0.15s" : "none" }}
+              className="hidden sm:flex flex-col items-center self-stretch py-2 shrink-0 gap-2"
+              style={{
+                width: 60,
+                animation: mounted ? "avatarIn 0.45s ease both 0.15s" : "none",
+              }}
             >
-              {/* Opponent avatar (top) */}
+              {/* Opponent avatar */}
               <PlayerCard
                 player={opponentPlayer}
                 isAI={mode !== "pvp"}
@@ -616,19 +737,48 @@ function BattleView({
                 piecesLeft={opponentPieces}
               />
 
-              {/* Turn number in centre */}
-              <div className="flex flex-col items-center gap-1.5">
-                <div className="w-px" style={{ height: 28, background: "linear-gradient(180deg,transparent,rgba(201,168,76,0.35))" }} />
+              {/* Pieces captured BY opponent */}
+              <CapturedPieces
+                capturedByPlayer={opponentPlayer}
+                history={state.history}
+                player={opponentPlayer}
+              />
+
+              {/* Separator line */}
+              <div className="w-px flex-1 min-h-0" style={{ background: "linear-gradient(180deg,rgba(201,168,76,0.0),rgba(201,168,76,0.25),rgba(201,168,76,0.0))" }} />
+
+              {/* Turn number badge */}
+              <div
+                className="flex flex-col items-center gap-1 shrink-0"
+                key={`turn-${turnNumber}`}
+              >
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center"
-                  style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)" }}
+                  style={{
+                    background: "rgba(201,168,76,0.08)",
+                    border: "1px solid rgba(201,168,76,0.3)",
+                    boxShadow: "0 0 8px rgba(201,168,76,0.1)",
+                  }}
                 >
-                  <span className="font-serif text-[9px] font-bold text-[#b8860b]">{turnNumber}</span>
+                  <span className="font-serif font-bold text-[#b8860b]" style={{ fontSize: 9 }}>
+                    {turnNumber}
+                  </span>
                 </div>
-                <div className="w-px" style={{ height: 28, background: "linear-gradient(180deg,rgba(201,168,76,0.35),transparent)" }} />
+                {/* Move history */}
+                <MoveHistoryMini history={state.history} />
               </div>
 
-              {/* Human avatar (bottom) */}
+              {/* Separator line */}
+              <div className="w-px flex-1 min-h-0" style={{ background: "linear-gradient(180deg,rgba(201,168,76,0.0),rgba(201,168,76,0.25),rgba(201,168,76,0.0))" }} />
+
+              {/* Pieces captured BY human */}
+              <CapturedPieces
+                capturedByPlayer={humanPlayer}
+                history={state.history}
+                player={humanPlayer}
+              />
+
+              {/* Human avatar */}
               <PlayerCard
                 player={humanPlayer}
                 isAI={false}

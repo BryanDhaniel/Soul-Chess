@@ -103,10 +103,12 @@ export interface TurnRecord {
   player: Player;
   action: ActionType;
   pieceId: string;
+  pieceDefinitionId: string;   // definition of the moving piece
   from?: Coord;
   to?: Coord;
   damage?: number;
   capturedPieceId?: string;
+  capturedDefinitionId?: string; // definition of captured piece (for display after removal)
 }
 
 // ─── Game State ──────────────────────────────────────────────
