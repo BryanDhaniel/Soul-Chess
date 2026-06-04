@@ -440,10 +440,16 @@ function PiecePanel({ piece, isEnemy = false, onClose }: {
 }
 
 // ─── Win Overlay ──────────────────────────────────────────────
-function WinOverlay({ winner, onRematch, onExit }: {
-  winner: Player; onRematch: () => void; onExit: () => void;
+function WinOverlay({ winner, reason = "captured", onRematch, onExit }: {
+  winner: Player;
+  reason?: "captured" | "no-king";
+  onRematch: () => void;
+  onExit: () => void;
 }) {
   const cfg = PLAYER_CFG[winner];
+  const subtitle = reason === "no-king"
+    ? "Opponent's King was not deployed"
+    : "The enemy King has fallen";
   return (
     <div
       className="absolute inset-0 z-50 flex items-center justify-center"
@@ -657,6 +663,10 @@ function BattleView({
   const opponentPieces = Object.values(state.pieces).filter(p => p.owner === opponentPlayer).length;
   const humanPieces    = Object.values(state.pieces).filter(p => p.owner === humanPlayer).length;
 
+  // Check if either king is missing from decks
+  const whiteMissingKing = !state.kingIds.white;
+  const blackMissingKing = !state.kingIds.black;
+
   return (
     <>
       <style>{STYLES}</style>
@@ -666,7 +676,29 @@ function BattleView({
       >
         {/* Win overlay */}
         {phase === "ended" && winner && (
-          <WinOverlay winner={winner} onRematch={onRematch} onExit={() => router.push("/")} />
+          <WinOverlay
+            winner={winner}
+            reason={whiteMissingKing || blackMissingKing ? "no-king" : "captured"}
+            onRematch={onRematch}
+            onExit={() => router.push("/")}
+          />
+        )}
+
+        {/* Missing king warning banner */}
+        {(whiteMissingKing || blackMissingKing) && phase === "battle" && (
+          <div
+            className="flex items-center justify-center gap-2 px-4 py-2 text-xs shrink-0"
+            style={{ background: "rgba(248,113,113,0.12)", borderBottom: "1px solid rgba(248,113,113,0.3)", color: "#f87171" }}
+          >
+            <span>⚠</span>
+            <span className="font-serif">
+              {whiteMissingKing && blackMissingKing
+                ? "Both decks are missing a Soul King — game cannot end"
+                : whiteMissingKing
+                  ? "White deck has no Soul King"
+                  : "Black deck has no Soul King"}
+            </span>
+          </div>
         )}
 
         {/* ── Header ─────────────────────────────────── */}

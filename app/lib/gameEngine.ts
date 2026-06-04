@@ -161,9 +161,15 @@ function switchPlayer(state: GameState): GameState {
 }
 
 // ─── Win check ───────────────────────────────────────────────
+// kingId === "" means king was never placed (invalid deck) — not a win condition.
+// kingId !== "" but not in pieces means king was captured → opponent wins.
 function checkWin(state: GameState): Player | null {
-  if (state.kingIds.white && !state.pieces[state.kingIds.white]) return "black";
-  if (state.kingIds.black && !state.pieces[state.kingIds.black]) return "white";
+  const wk = state.kingIds.white;
+  const bk = state.kingIds.black;
+  // White king captured → black wins
+  if (wk && !state.pieces[wk]) return "black";
+  // Black king captured → white wins
+  if (bk && !state.pieces[bk]) return "white";
   return null;
 }
 
@@ -176,12 +182,20 @@ export function createInitialState(whiteDeck: DeckConfig, blackDeck: DeckConfig)
   const { pieces: p2, kingId: bk } = deployDeck(blackDeck, "black", pieces);
   pieces = p2;
 
+  // If either deck is missing a king, the game cannot be played properly.
+  // Show an immediate win for the player who HAS a king, or null if both missing.
+  let startWinner: Player | null = null;
+  if (!wk && bk) startWinner = "white";  // white has no king → black wins
+  if (wk && !bk) startWinner = "black";  // black has no king → white wins
+
   return {
-    phase: "battle", currentPlayer: "white", turnNumber: 1,
+    phase: startWinner ? "ended" : "battle",
+    currentPlayer: "white", turnNumber: 1,
     board: syncBoard(board, pieces), pieces,
     selectedPieceId: null, validMoves: [], validAttacks: [],
     validAbilityTargets: [], activeAbilityId: null,
-    kingIds: { white: wk, black: bk }, history: [], winner: null,
+    kingIds: { white: wk, black: bk }, history: [],
+    winner: startWinner,
   };
 }
 
