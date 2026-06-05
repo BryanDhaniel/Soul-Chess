@@ -1,18 +1,17 @@
 // ============================================================
-// SOULCHESS — useGameState Hook (with AI support)
+// SOULCHESS — useGameState Hook (with sound effects)
 // ============================================================
 "use client";
 import { useReducer, useCallback, useMemo, useEffect, useRef } from "react";
 import { gameReducer, createInitialState } from "../lib/gameEngine";
 import { createAI, type AIDifficulty } from "../lib/ai";
-import type { Coord, DeckConfig, Player } from "../types/game";
+import { sfx } from "../lib/sounds";
+import type { Coord, DeckConfig, Player, GameState } from "../types/game";
 
 export interface UseGameStateOptions {
   whiteDeck: DeckConfig;
   blackDeck: DeckConfig;
-  // Which player(s) are controlled by AI. undefined = human vs human.
   aiPlayers?: Partial<Record<Player, AIDifficulty>>;
-  // Delay in ms before AI makes its move (feels more natural). Default 600.
   aiDelay?: number;
 }
 
@@ -28,7 +27,35 @@ export function useGameState({
     () => createInitialState(whiteDeck, blackDeck),
   );
 
-  // Keep a stable ref to AI strategies
+  // ── Track previous state for sound triggers ──────────────
+  const prevStateRef = useRef<GameState>(state);
+
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    const curr = state;
+
+    // Piece captured — compare piece counts
+    const prevCount = Object.keys(prev.pieces).length;
+    const currCount = Object.keys(curr.pieces).length;
+    if (currCount < prevCount) {
+      sfx.capture();
+    }
+    // Move made (no capture, but current player switched)
+    else if (prev.currentPlayer !== curr.currentPlayer && curr.phase === "battle") {
+      sfx.move();
+    }
+
+    // Win / defeat
+    if (!prev.winner && curr.winner) {
+      // We don't know which side the human is from here — play victory always
+      // (BattleView can call victory/defeat directly if needed)
+      sfx.victory();
+    }
+
+    prevStateRef.current = curr;
+  }, [state]);
+
+  // ── AI turn trigger ───────────────────────────────────────
   const aiRef = useRef<Partial<Record<Player, ReturnType<typeof createAI>>>>({});
   useEffect(() => {
     const next: Partial<Record<Player, ReturnType<typeof createAI>>> = {};
@@ -39,54 +66,49 @@ export function useGameState({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(aiPlayers)]);
 
-  // ── AI turn trigger ──────────────────────────────────────
   useEffect(() => {
     if (state.phase !== "battle" || state.winner) return;
-
     const ai = aiRef.current[state.currentPlayer];
-    if (!ai) return; // human's turn
+    if (!ai) return;
 
     const timer = setTimeout(() => {
       const move = ai.chooseMove(state, state.currentPlayer);
       if (!move) return;
 
       if (move.kind === "attack") {
-        // Select piece first (needed for engine validation), then attack
         dispatch({ type: "SELECT_PIECE", pieceId: move.pieceId });
-        // Slight delay so SELECT has time to compute validAttacks before ATTACK
-        setTimeout(() => {
-          dispatch({ type: "ATTACK_PIECE", targetId: move.targetId });
-        }, 50);
+        setTimeout(() => dispatch({ type: "ATTACK_PIECE", targetId: move.targetId }), 50);
       } else {
         dispatch({ type: "SELECT_PIECE", pieceId: move.pieceId });
-        setTimeout(() => {
-          dispatch({ type: "MOVE_PIECE", to: move.to });
-        }, 50);
+        setTimeout(() => dispatch({ type: "MOVE_PIECE", to: move.to }), 50);
       }
     }, aiDelay);
 
     return () => clearTimeout(timer);
   }, [state.currentPlayer, state.phase, state.winner, state.turnNumber, aiDelay]);
 
-  // ── Human dispatchers ────────────────────────────────────
-  const selectPiece = useCallback(
-    (pieceId: string) => dispatch({ type: "SELECT_PIECE", pieceId }),
-    [],
-  );
+  // ── Human dispatchers ─────────────────────────────────────
+  const selectPiece = useCallback((pieceId: string) => {
+    sfx.select();
+    dispatch({ type: "SELECT_PIECE", pieceId });
+  }, []);
+
   const deselect = useCallback(
     () => dispatch({ type: "DESELECT" }),
     [],
   );
+
   const movePiece = useCallback(
     (to: Coord) => dispatch({ type: "MOVE_PIECE", to }),
     [],
   );
+
   const attackPiece = useCallback(
     (targetId: string) => dispatch({ type: "ATTACK_PIECE", targetId }),
     [],
   );
 
-  // ── Derived state ────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────
   const selectedPiece = state.selectedPieceId
     ? (state.pieces[state.selectedPieceId] ?? null)
     : null;
@@ -95,22 +117,20 @@ export function useGameState({
     () => new Set(state.validMoves.map(c => `${c.row}-${c.col}`)),
     [state.validMoves],
   );
+
   const validAttackKeys = useMemo(
     () => new Set(state.validAttacks.map(c => `${c.row}-${c.col}`)),
     [state.validAttacks],
   );
 
-  // Is the current turn controlled by AI?
   const isAITurn = Boolean(aiRef.current[state.currentPlayer]);
 
   return {
     state,
-    // Human actions — UI should disable these when isAITurn = true
     selectPiece,
     deselect,
     movePiece,
     attackPiece,
-    // Derived
     selectedPiece,
     validMoveKeys,
     validAttackKeys,

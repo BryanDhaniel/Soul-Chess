@@ -2,7 +2,7 @@
 // SOULCHESS — /play/local
 // ============================================================
 "use client";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Crown, ChevronLeft, Swords, Shield, Heart, Zap,
@@ -17,6 +17,7 @@ import {
   loadDecks, loadActiveDeckId, makeDefaultDeck, makeRandomDeck,
 } from "../../lib/deckStorage";
 import type { AIDifficulty } from "../../lib/ai";
+import { sfx, getMuted, setMuted } from "../../lib/sounds";
 
 // ─── Keyframes ────────────────────────────────────────────────
 const STYLES = `
@@ -587,9 +588,16 @@ function BattleView({
   mode: GameMode; onRematch: () => void;
 }) {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [mounted, setMounted]         = useState(false);
+  const [panelOpen, setPanelOpen]     = useState(false);
   const [viewingPiece, setViewingPiece] = useState<Piece | null>(null);
+  const [muted, setMutedState]        = useState(false);
+
+  const toggleMute = useCallback(() => {
+    const next = !getMuted();
+    setMuted(next);
+    setMutedState(next);
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 30);
@@ -610,6 +618,18 @@ function BattleView({
   const cfg         = PLAYER_CFG[currentPlayer];
   const isCurrentAI = mode !== "pvp" && currentPlayer !== humanPlayer;
   const opponentPlayer: Player = humanPlayer === "white" ? "black" : "white";
+
+  // Play victory / defeat once when game ends
+  const prevWinnerRef = useRef<typeof winner>(null);
+  useEffect(() => {
+    if (winner && !prevWinnerRef.current) {
+      setTimeout(() => {
+        if (winner === humanPlayer) sfx.victory();
+        else sfx.defeat();
+      }, 250);
+    }
+    prevWinnerRef.current = winner;
+  }, [winner, humanPlayer]);
 
   // Auto-open panel when piece selected or viewed
   useEffect(() => {
@@ -653,6 +673,7 @@ function BattleView({
     }
     // Empty non-move tile — clear everything
     setViewingPiece(null);
+    sfx.invalid();
     deselect();
   }, [
     isAITurn, phase, mode, currentPlayer, humanPlayer, state.selectedPieceId,
@@ -739,7 +760,20 @@ function BattleView({
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5">
+            {/* Mute toggle */}
+            <button
+              onClick={toggleMute}
+              className="flex items-center justify-center w-7 h-7 rounded-full cursor-pointer transition-all hover:scale-110"
+              style={{
+                background: muted ? "rgba(248,113,113,0.1)" : "rgba(201,168,76,0.1)",
+                border: `1px solid ${muted ? "rgba(248,113,113,0.35)" : "rgba(201,168,76,0.3)"}`,
+                color: muted ? "#f87171" : "#b8860b",
+              }}
+              title={muted ? "Unmute" : "Mute"}
+            >
+              <span style={{ fontSize: 12 }}>{muted ? "🔇" : "🔊"}</span>
+            </button>
             <Crown className="size-4 text-[#b8860b]" />
             <span className="font-serif font-bold text-sm text-[#1e3a6e] tracking-wider hidden sm:block">
               SoulChess
