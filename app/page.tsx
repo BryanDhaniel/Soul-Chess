@@ -2,7 +2,8 @@
 // SOULCHESS — Main Menu (Refined + Animated)
 // ============================================================
 'use client';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { startSoundtrack, stopSoundtrack, setSoundtrackVolume } from "./lib/soundtrack";
 import Image from "next/image";
 import {
   BookOpen, ChevronRight, Crown, Feather, Gamepad2,
@@ -85,6 +86,8 @@ function OrnDivider({ delay = "0s" }: { delay?: string }) {
 }
 
 // ─── Nav Item ─────────────────────────────────────────────────
+// All items look the same by default.
+// On hover: gradient bg + left bar + chevron appear (same as old "active" style).
 function NavItem({
   icon, label, onClick, delay,
 }: {
@@ -113,7 +116,7 @@ function NavItem({
     >
       {/* Hover left bar — slides in from left */}
       <div
-        className="absolute left-0 top-2 bottom-2 w-0.75 rounded-r"
+        className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r"
         style={{
           background: "#c9a84c",
           boxShadow: "0 0 8px #c9a84c",
@@ -164,11 +167,32 @@ function NavItem({
 // ─── Main ─────────────────────────────────────────────────────
 export default function App(): JSX.Element {
   const router  = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted]   = useState(false);
+  const [musicOn, setMusicOn]   = useState(false);
 
+  // Start soundtrack on first user interaction (browser autoplay policy)
+  const toggleMusic = useCallback(() => {
+    if (musicOn) {
+      stopSoundtrack(1.5);
+      setMusicOn(false);
+    } else {
+      startSoundtrack(0.32);
+      setMusicOn(true);
+    }
+  }, [musicOn]);
+
+  // Auto-start after mount with small delay
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 40);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      setMounted(true);
+      // Try auto-start (works if user has already interacted with page)
+      startSoundtrack(0.32);
+      setMusicOn(true);
+    }, 800);
+    return () => {
+      clearTimeout(t);
+      stopSoundtrack(0.5);
+    };
   }, []);
 
   return (
@@ -533,9 +557,24 @@ export default function App(): JSX.Element {
               className="absolute inset-x-6 lg:inset-x-10 bottom-5 lg:bottom-7 flex justify-between items-center z-10"
               style={{ animation: mounted ? "slideUp 0.4s ease both 0.58s" : "none" }}
             >
-              <div className="hidden sm:flex items-center gap-2 text-[#8b7d6b]" style={{ fontSize: 10 }}>
+              <div className="hidden sm:flex items-center gap-3 text-[#8b7d6b]" style={{ fontSize: 10 }}>
                 <Feather className="size-3 shrink-0" />
                 <span className="italic">&quot;The board is a battlefield of souls.&quot;</span>
+                {/* Music toggle */}
+                <button
+                  onClick={toggleMusic}
+                  className="flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105"
+                  style={{
+                    background: musicOn ? "rgba(201,168,76,0.1)" : "rgba(0,0,0,0.04)",
+                    border: `1px solid ${musicOn ? "rgba(201,168,76,0.4)" : "rgba(0,0,0,0.1)"}`,
+                    borderRadius: 20,
+                    padding: "3px 8px",
+                    color: musicOn ? "#b8860b" : "#8b7d6b",
+                  }}
+                >
+                  <span style={{ fontSize: 11 }}>{musicOn ? "♪" : "♪"}</span>
+                  <span style={{ fontSize: 9, letterSpacing: "0.05em" }}>{musicOn ? "ON" : "OFF"}</span>
+                </button>
               </div>
               <div
                 className="flex items-center gap-4 w-full sm:w-auto justify-center sm:justify-end"
