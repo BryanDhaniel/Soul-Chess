@@ -3,7 +3,7 @@
 // ============================================================
 
 export type Player = "white" | "black";
-export type GamePhase = "battle" | "ended";
+export type GamePhase = "battle" | "ended" | "draw";
 export type ActionType = "move" | "attack";
 export type TileHighlight = "none" | "selected" | "move" | "attack" | "ability" | "deploy";
 
@@ -126,6 +126,7 @@ export interface GameState {
   kingIds: Record<Player, string>;
   history: TurnRecord[];
   winner: Player | null;
+  isDraw: boolean;
 }
 
 // ─── Actions ─────────────────────────────────────────────────

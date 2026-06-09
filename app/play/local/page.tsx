@@ -441,16 +441,19 @@ function PiecePanel({ piece, isEnemy = false, onClose }: {
 }
 
 // ─── Win Overlay ──────────────────────────────────────────────
-function WinOverlay({ winner, reason = "captured", onRematch, onExit }: {
-  winner: Player;
+function WinOverlay({ winner, isDraw = false, reason = "captured", onRematch, onExit }: {
+  winner?: Player | null;
+  isDraw?: boolean;
   reason?: "captured" | "no-king";
   onRematch: () => void;
   onExit: () => void;
 }) {
-  const cfg = PLAYER_CFG[winner];
-  const subtitle = reason === "no-king"
-    ? "Opponent's King was not deployed"
-    : "The enemy King has fallen";
+  const cfg      = winner ? PLAYER_CFG[winner] : { label: "Draw", color: "#8b7d6b" };
+  const subtitle = isDraw
+    ? "No moves available — stalemate"
+    : reason === "no-king"
+      ? "Opponent's King was not deployed"
+      : "The enemy King has fallen";
   return (
     <div
       className="absolute inset-0 z-50 flex items-center justify-center"
@@ -472,12 +475,17 @@ function WinOverlay({ winner, reason = "captured", onRematch, onExit }: {
           className="w-16 h-16 rounded-full flex items-center justify-center"
           style={{ background: `${cfg.color}15`, border: `2px solid ${cfg.color}50` }}
         >
-          <Crown className="size-8" style={{ color: cfg.color }} />
+          {isDraw
+            ? <span style={{ fontSize: 32 }}>⚖</span>
+            : <Crown className="size-8" style={{ color: cfg.color }} />
+          }
         </div>
         <div className="text-center flex flex-col gap-1.5 w-full">
-          <p className="text-[10px] uppercase tracking-[0.4em] text-[#8b7d6b]">Victory</p>
+          <p className="text-[10px] uppercase tracking-[0.4em] text-[#8b7d6b]">
+            {isDraw ? "Stalemate" : "Victory"}
+          </p>
           <h2 className="font-serif font-bold text-2xl uppercase tracking-widest" style={{ color: cfg.color }}>
-            {cfg.label}
+            {isDraw ? "Draw" : cfg.label}
           </h2>
           <OrnDivider />
           <p className="text-[10px] text-[#8b7d6b] italic font-serif mt-1">
@@ -622,14 +630,16 @@ function BattleView({
   // Play victory / defeat once when game ends
   const prevWinnerRef = useRef<typeof winner>(null);
   useEffect(() => {
-    if (winner && !prevWinnerRef.current) {
+    const ended = phase === "ended" || phase === "draw";
+    if (ended && !prevWinnerRef.current) {
       setTimeout(() => {
-        if (winner === humanPlayer) sfx.victory();
+        if (state.isDraw) sfx.turnSwitch(); // neutral sound for draw
+        else if (winner === humanPlayer) sfx.victory();
         else sfx.defeat();
       }, 250);
     }
     prevWinnerRef.current = winner;
-  }, [winner, humanPlayer]);
+  }, [winner, phase, humanPlayer, state.isDraw]);
 
   // Auto-open panel when piece selected or viewed
   useEffect(() => {
@@ -695,10 +705,11 @@ function BattleView({
         className="h-screen w-full flex flex-col overflow-hidden"
         style={{ background: "radial-gradient(ellipse at 60% 0%,#fff4c2 0%,#f5f0e8 40%,#ece4d3 100%)" }}
       >
-        {/* Win overlay */}
-        {phase === "ended" && winner && (
+        {/* Win overlay — victory or draw */}
+        {(phase === "ended" || phase === "draw") && (
           <WinOverlay
             winner={winner}
+            isDraw={state.isDraw}
             reason={whiteMissingKing || blackMissingKing ? "no-king" : "captured"}
             onRematch={onRematch}
             onExit={() => router.push("/")}
