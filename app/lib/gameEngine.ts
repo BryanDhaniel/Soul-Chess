@@ -149,7 +149,7 @@ function switchPlayer(state: GameState): GameState {
       })),
     };
   }
-  return {
+  const nextState: GameState = {
     ...state,
     currentPlayer: next,
     turnNumber: next === "white" ? state.turnNumber + 1 : state.turnNumber,
@@ -157,20 +157,58 @@ function switchPlayer(state: GameState): GameState {
     board: syncBoard(clearHighlights(state.board), newPieces),
     selectedPieceId: null,
     validMoves: [], validAttacks: [], validAbilityTargets: [], activeAbilityId: null,
+    isDraw: false,
   };
+
+  // Check stalemate for the next player
+  if (checkStalemate(nextState)) {
+    return { ...nextState, phase: "draw", isDraw: true };
+  }
+
+  return nextState;
 }
 
 // ─── Win check ───────────────────────────────────────────────
-// kingId === "" means king was never placed (invalid deck) — not a win condition.
-// kingId !== "" but not in pieces means king was captured → opponent wins.
 function checkWin(state: GameState): Player | null {
   const wk = state.kingIds.white;
   const bk = state.kingIds.black;
-  // White king captured → black wins
   if (wk && !state.pieces[wk]) return "black";
-  // Black king captured → white wins
   if (bk && !state.pieces[bk]) return "white";
   return null;
+}
+
+// ─── Stalemate check ─────────────────────────────────────────
+// Returns true if the current player has NO valid moves or attacks.
+// Chess rule: stalemate = draw.
+function checkStalemate(state: GameState): boolean {
+  const myPieces = Object.values(state.pieces).filter(
+    p => p.owner === state.currentPlayer
+  );
+  const pieceMap = buildPieceMap(state.pieces);
+
+  for (const piece of myPieces) {
+    const def  = getPieceDefinitionById(piece.definitionId);
+    const flip = piece.definitionId === "iron_pawn" ? pawnDir(piece.owner) : 1;
+
+    // Check moves
+    for (const [dr, dc, maxSteps] of def.movement.directions) {
+      const steps = maxSteps === 0 ? GRID_SIZE : maxSteps;
+      for (let s = 1; s <= steps; s++) {
+        const r = piece.position.row + dr * flip * s;
+        const c = piece.position.col + dc * s;
+        if (!isInBounds(r, c) || !isInsideOctagon(r, c)) break;
+        const blocker = pieceMap.get(coordKey({ row: r, col: c }));
+        if (!blocker) return false; // found at least one valid move
+        if (!def.movement.canLeap) break;
+      }
+    }
+
+    // Check attacks (including pawn diagonal)
+    const attacks = calcAttacks(piece, pieceMap);
+    if (attacks.length > 0) return false; // found at least one valid attack
+  }
+
+  return true; // no moves and no attacks → stalemate
 }
 
 // ─── Public API ──────────────────────────────────────────────
@@ -196,6 +234,7 @@ export function createInitialState(whiteDeck: DeckConfig, blackDeck: DeckConfig)
     validAbilityTargets: [], activeAbilityId: null,
     kingIds: { white: wk, black: bk }, history: [],
     winner: startWinner,
+    isDraw: false,
   };
 }
 
