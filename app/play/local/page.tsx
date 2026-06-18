@@ -5,7 +5,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Crown, ChevronLeft, Swords, Shield, Heart, Zap,
+  Crown, ChevronLeft, Zap,
   X, Bot, User, Info, Layers, Play,
 } from "lucide-react";
 import type { Piece, DeckConfig, Player } from "../../types/game";
@@ -73,7 +73,7 @@ function CapturedPieces({
 
   return (
     <div className="flex flex-col items-center gap-1 w-full">
-      <div className="flex flex-wrap justify-center gap-0.5 max-w-[52px]">
+      <div className="flex flex-wrap justify-center gap-0.5 max-w-13">
         {captured.map((r, i) => {
           const def = getPieceDefinitionById(r.capturedDefinitionId!);
           return (
@@ -287,7 +287,6 @@ function PiecePanel({ piece, isEnemy = false, onClose }: {
 }) {
   const def   = getPieceDefinitionById(piece.definitionId);
   const fc    = FACTION_COLOR[def.faction] ?? "#c9a84c";
-  const hpPct = piece.maxHp > 0 ? (piece.hp / piece.maxHp) * 100 : 100;
   // Enemy pieces shown with a subtle red tint on the border
   const borderColor = isEnemy ? "rgba(248,113,113,0.4)" : "rgba(201,168,76,0.35)";
   const ownerColor  = isEnemy ? "#f87171" : "#4ade80";
@@ -351,58 +350,6 @@ function PiecePanel({ piece, isEnemy = false, onClose }: {
       </div>
 
       <div className="flex flex-col gap-3 p-4">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {piece.maxHp > 0 ? (
-            <div className="flex flex-col items-center gap-1 py-2 rounded-lg"
-              style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.25)" }}>
-              <span className="flex items-center gap-0.5 font-bold text-xs text-[#4ade80]">
-                <Heart className="size-2.5" />{piece.hp}/{piece.maxHp}
-              </span>
-              <span className="text-[8px] uppercase tracking-wider text-[#8b7d6b]">HP</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-1 py-2 rounded-lg"
-              style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)" }}>
-              <span className="flex items-center gap-0.5 font-bold text-xs text-[#f87171]">
-                <Swords className="size-2.5" />∞
-              </span>
-              <span className="text-[8px] uppercase tracking-wider text-[#8b7d6b]">Kill</span>
-            </div>
-          )}
-          <div className="flex flex-col items-center gap-1 py-2 rounded-lg"
-            style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.25)" }}>
-            <span className="flex items-center gap-0.5 font-bold text-xs text-[#f97316]">
-              <Swords className="size-2.5" />{piece.attack}
-            </span>
-            <span className="text-[8px] uppercase tracking-wider text-[#8b7d6b]">Atk</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 py-2 rounded-lg"
-            style={{ background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.25)" }}>
-            <span className="flex items-center gap-0.5 font-bold text-xs text-[#60a5fa]">
-              <Shield className="size-2.5" />{piece.defense}
-            </span>
-            <span className="text-[8px] uppercase tracking-wider text-[#8b7d6b]">Def</span>
-          </div>
-        </div>
-
-        {/* HP bar */}
-        {piece.maxHp > 0 && (
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.08)" }}>
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${hpPct}%`,
-                background: hpPct > 60
-                  ? "linear-gradient(90deg,#4ade80,#22c55e)"
-                  : hpPct > 30
-                    ? "linear-gradient(90deg,#facc15,#f59e0b)"
-                    : "linear-gradient(90deg,#f87171,#ef4444)",
-              }}
-            />
-          </div>
-        )}
-
         <OrnDivider />
 
         {/* Abilities */}

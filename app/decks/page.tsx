@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Plus, Trash2, Edit2, Star, Play,
-  Heart, Swords, Shield, X, Crown, Check, AlertCircle,
+  X, Crown, Check, AlertCircle,
 } from "lucide-react";
 import type { DeckConfig, FormationSlot, PieceDefinition, Coord } from "../types/game";
 import { getAllDefinitions, getPieceDefinitionById } from "../lib/pieceRegistry";
@@ -112,14 +112,8 @@ function PieceCard({
           </div>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[8px] flex items-center gap-0.5" style={{ color: "#8b7d6b" }}>
-            <Heart className="size-2" />{def.maxHp > 0 ? def.maxHp : "∞"}
-          </span>
-          <span className="text-[8px] flex items-center gap-0.5" style={{ color: "#8b7d6b" }}>
-            <Swords className="size-2" />{def.attack}
-          </span>
-          <span className="text-[8px] flex items-center gap-0.5" style={{ color: "#8b7d6b" }}>
-            <Shield className="size-2" />{def.defense}
+          <span className="text-[8px] uppercase tracking-wider" style={{ color: "#8b7d6b" }}>
+            {def.faction}
           </span>
           {count > 0 && (
             <span
@@ -759,17 +753,7 @@ export default function DecksPage() {
                   </div>
                 </div>
                 <p className="text-[10px] text-[#8b7d6b] leading-relaxed">{selectedDef.description}</p>
-                <div className="flex items-center gap-3 text-[10px]">
-                  <span className="flex items-center gap-1 text-[#4ade80]">
-                    <Heart className="size-3" />{selectedDef.maxHp > 0 ? selectedDef.maxHp : "∞"}
-                  </span>
-                  <span className="flex items-center gap-1 text-[#f97316]">
-                    <Swords className="size-3" />{selectedDef.attack}
-                  </span>
-                  <span className="flex items-center gap-1 text-[#60a5fa]">
-                    <Shield className="size-3" />{selectedDef.defense}
-                  </span>
-                </div>
+
                 {selectedDef.abilities.map(ab => (
                   <div
                     key={ab.id}

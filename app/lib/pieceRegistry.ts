@@ -8,8 +8,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 1. SOUL KING ─────────────────────────────────────────────
   {
     typeId: "soul_king", name: "Soul King", faction: "Arcane", tier: 3,
-    description: "The linchpin of your army. Capture the enemy King to win.",
-    maxHp: 5, attack: 2, defense: 2, symbol: "♔",
+    description: "The linchpin of your army. Capture the enemy King to win.", symbol: "♔",
     movement: {
       directions: [
         [-1,-1,1],[-1,0,1],[-1,1,1],
@@ -30,8 +29,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 2. ARCANE KNIGHT ─────────────────────────────────────────
   {
     typeId: "arcane_knight", name: "Arcane Knight", faction: "Arcane", tier: 1,
-    description: "Leaps over pieces in an L-shape. Instant capture on contact.",
-    maxHp: 0, attack: 3, defense: 0, symbol: "♞",
+    description: "Leaps over pieces in an L-shape. Instant capture on contact.", symbol: "♞",
     movement: {
       directions: [
         [-2,-1,1],[-2,1,1],[-1,-2,1],[-1,2,1],
@@ -51,8 +49,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 3. VOID ROOK ──────────────────────────────────────────────
   {
     typeId: "void_rook", name: "Void Rook", faction: "Void", tier: 2,
-    description: "A hulking siege engine. Slides orthogonally, absorbs punishment.",
-    maxHp: 8, attack: 4, defense: 3, symbol: "♜",
+    description: "A hulking siege engine. Slides orthogonally, absorbs punishment.", symbol: "♜",
     movement: {
       directions: [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0]],
       canLeap: false,
@@ -69,8 +66,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 4. WRAITH BISHOP ─────────────────────────────────────────
   {
     typeId: "wraith_bishop", name: "Wraith Bishop", faction: "Void", tier: 1,
-    description: "Drifts diagonally across the board. Destroys on contact.",
-    maxHp: 0, attack: 5, defense: 0, symbol: "♝",
+    description: "Drifts diagonally across the board. Destroys on contact.", symbol: "♝",
     movement: {
       directions: [[-1,-1,0],[-1,1,0],[1,-1,0],[1,1,0]],
       canLeap: false,
@@ -87,8 +83,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 5. STORM MAGE ────────────────────────────────────────────
   {
     typeId: "storm_mage", name: "Storm Mage", faction: "Arcane", tier: 2,
-    description: "Commands the storm. Moves in any direction up to 3 squares.",
-    maxHp: 4, attack: 3, defense: 1, symbol: "✦",
+    description: "Commands the storm. Moves in any direction up to 3 squares.", symbol: "✦",
     movement: {
       directions: [
         [-1,-1,3],[-1,0,3],[-1,1,3],
@@ -109,8 +104,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 6. IRON PAWN ─────────────────────────────────────────────
   {
     typeId: "iron_pawn", name: "Iron Pawn", faction: "Iron", tier: 1,
-    description: "Marches forward, strikes diagonally. The backbone of every army.",
-    maxHp: 3, attack: 2, defense: 1, symbol: "♟",
+    description: "Marches forward, strikes diagonally. The backbone of every army.", symbol: "♟",
     movement: {
       // Forward direction flipped per owner in engine (white = -1, black = +1)
       directions: [[-1,0,1]],
@@ -128,8 +122,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 7. SOULBOUND QUEEN ───────────────────────────────────────
   {
     typeId: "soulbound_queen", name: "Soulbound Queen", faction: "Arcane", tier: 3,
-    description: "Unlimited movement in all directions. Devastating one-shot capture.",
-    maxHp: 0, attack: 6, defense: 0, symbol: "♛",
+    description: "Unlimited movement in all directions. Devastating one-shot capture.", symbol: "♛",
     movement: {
       directions: [
         [-1,-1,0],[-1,0,0],[-1,1,0],
@@ -150,8 +143,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 8. EMBER DRAKE ───────────────────────────────────────────
   {
     typeId: "ember_drake", name: "Ember Drake", faction: "Fire", tier: 2,
-    description: "Charges forward or arcs diagonally. Breathes fire.",
-    maxHp: 6, attack: 3, defense: 2, symbol: "🐉",
+    description: "Charges forward or arcs diagonally. Breathes fire.", symbol: "🐉",
     movement: {
       directions: [
         [-2,0,1],
@@ -172,8 +164,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 9. PHANTOM ASSASSIN ──────────────────────────────────────
   {
     typeId: "phantom_assassin", name: "Phantom Assassin", faction: "Void", tier: 2,
-    description: "Leaps up to 2 tiles in any direction. Bypasses armor.",
-    maxHp: 2, attack: 4, defense: 0, symbol: "☽",
+    description: "Leaps up to 2 tiles in any direction. Bypasses armor.", symbol: "☽",
     movement: {
       directions: [
         [-2,-2,1],[-2,0,1],[-2,2,1],
@@ -196,8 +187,7 @@ const DEFINITIONS: PieceDefinition[] = [
   // 10. STONE SENTINEL ───────────────────────────────────────
   {
     typeId: "stone_sentinel", name: "Stone Sentinel", faction: "Iron", tier: 2,
-    description: "Cannot move. Nearly impenetrable wall. Taunts adjacent enemies.",
-    maxHp: 12, attack: 2, defense: 5, symbol: "⬡",
+    description: "Cannot move. Nearly impenetrable wall. Taunts adjacent enemies.", symbol: "⬡",
     movement: { directions: [], canLeap: false },
     abilities: [
       {

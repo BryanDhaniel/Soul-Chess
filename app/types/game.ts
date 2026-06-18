@@ -35,9 +35,6 @@ export interface PieceDefinition {
   name: string;
   faction: string;
   description: string;
-  maxHp: number;        // 0 = chess-mode one-shot
-  attack: number;
-  defense: number;
   movement: MovementPattern;
   abilities: Omit<Ability, "currentCooldown">[];
   symbol: string;
@@ -49,10 +46,6 @@ export interface Piece {
   id: string;
   definitionId: string;
   owner: Player;
-  hp: number;
-  maxHp: number;
-  attack: number;
-  defense: number;
   position: Coord;
   hasActed: boolean;
   abilities: Ability[];
@@ -64,8 +57,6 @@ export interface Buff {
   id: string;
   name: string;
   duration: number;     // -1 = permanent
-  attackMod: number;
-  defenseMod: number;
   movementMod: number;
 }
 
@@ -106,7 +97,6 @@ export interface TurnRecord {
   pieceDefinitionId: string;   // definition of the moving piece
   from?: Coord;
   to?: Coord;
-  damage?: number;
   capturedPieceId?: string;
   capturedDefinitionId?: string; // definition of captured piece (for display after removal)
 }

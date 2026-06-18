@@ -6,7 +6,7 @@ import type {
 } from "../types/game";
 import {
   createBoard, buildPieceMap, applyHighlights, clearHighlights,
-  resolveAttack, coordKey, coordsEqual, isInBounds, isInsideOctagon, GRID_SIZE,
+  coordKey, coordsEqual, isInBounds, isInsideOctagon, GRID_SIZE,
 } from "./boardUtils";
 import { getPieceDefinitionById } from "./pieceRegistry";
 
@@ -17,8 +17,6 @@ function makePiece(definitionId: string, owner: Player, position: Coord): Piece 
   return {
     id: `${definitionId}_${owner}_${++_uid}`,
     definitionId, owner,
-    hp: def.maxHp, maxHp: def.maxHp,
-    attack: def.attack, defense: def.defense,
     position, hasActed: false,
     abilities: def.abilities.map(ab => ({ ...ab, currentCooldown: 0 })),
     buffs: [],
@@ -122,16 +120,6 @@ function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
     }
   }
   return valid;
-}
-
-// ─── Tile mods ───────────────────────────────────────────────
-function tileMods(tile: Tile) {
-  switch (tile.effect) {
-    case "amplify": return { atk:  1, def:  0 };
-    case "shield":  return { atk:  0, def:  1 };
-    case "cursed":  return { atk: -1, def: -1 };
-    default:        return { atk:  0, def:  0 };
-  }
 }
 
 // ─── Auto-switch ─────────────────────────────────────────────
@@ -275,11 +263,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (!state.board[pt.row][pt.col].pieceId) dest = pt;
       }
 
-      let moved: Piece = { ...piece, position: dest, hasActed: true };
+      const moved: Piece = { ...piece, position: dest, hasActed: true };
       const landTile = state.board[dest.row][dest.col];
-      if (landTile.effect === "sacred" && moved.maxHp > 0) {
-        moved = { ...moved, hp: Math.min(moved.maxHp, moved.hp + 1) };
-      }
 
       const record: TurnRecord = {
         turn: state.turnNumber, player: state.currentPlayer,
@@ -299,18 +284,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!attacker || !defender || attacker.hasActed) return state;
       if (!state.validAttacks.some(a => coordsEqual(a, defender.position))) return state;
 
-      const am = tileMods(state.board[attacker.position.row][attacker.position.col]);
-      const dm = tileMods(state.board[defender.position.row][defender.position.col]);
-      const atkBuff = attacker.buffs.reduce((s, b) => s + b.attackMod, 0);
-      const defBuff = defender.buffs.reduce((s, b) => s + b.defenseMod, 0);
-
-      const effAtk = { ...attacker, attack:  attacker.attack + am.atk + atkBuff };
-      const effDef = { ...defender, defense: Math.max(0, defender.defense + dm.def + defBuff) };
-      const { damage, isLethal } = resolveAttack(effAtk, effDef);
-
+      // 1-hit capture — chess style, no HP
       const newPieces = { ...state.pieces };
-      if (isLethal) delete newPieces[defender.id];
-      else newPieces[defender.id] = { ...defender, hp: defender.hp - damage };
+      delete newPieces[defender.id];
       newPieces[attacker.id] = { ...attacker, hasActed: true };
 
       const record: TurnRecord = {
@@ -318,9 +294,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         action: "attack", pieceId: attacker.id,
         pieceDefinitionId: attacker.definitionId,
         from: attacker.position, to: defender.position,
-        damage,
-        capturedPieceId: isLethal ? defender.id : undefined,
-        capturedDefinitionId: isLethal ? defender.definitionId : undefined,
+        capturedPieceId: defender.id,
+        capturedDefinitionId: defender.definitionId,
       };
       const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
       const winner = checkWin(next);
