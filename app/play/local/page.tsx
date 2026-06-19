@@ -359,25 +359,25 @@ function PiecePanel({ piece, isEnemy = false, onClose }: {
             {piece.abilities.map(ab => (
               <div
                 key={ab.id}
-                className="flex items-center justify-between px-2.5 py-2 rounded-lg"
+                className="flex flex-col gap-1 px-2.5 py-2 rounded-lg"
                 style={{
                   background: ab.currentCooldown > 0 ? "rgba(0,0,0,0.03)" : "rgba(155,109,224,0.08)",
                   border: `1px solid ${ab.currentCooldown > 0 ? "rgba(0,0,0,0.06)" : "rgba(155,109,224,0.28)"}`,
                 }}
               >
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] font-semibold text-[#1e3a6e] truncate">{ab.name}</span>
-                  <span className="text-[8px] text-[#8b7d6b] truncate">{ab.description}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-semibold text-[#1e3a6e]">{ab.name}</span>
+                  <div className="shrink-0">
+                    {ab.currentCooldown > 0 ? (
+                      <span className="text-[8px] text-[#8b7d6b]">CD {ab.currentCooldown}</span>
+                    ) : (
+                      <span className="flex items-center gap-0.5 text-[#9b6de0] text-[8px] font-bold">
+                        <Zap className="size-2.5" />Ready
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="shrink-0 ml-2">
-                  {ab.currentCooldown > 0 ? (
-                    <span className="text-[8px] text-[#8b7d6b]">CD {ab.currentCooldown}</span>
-                  ) : (
-                    <span className="flex items-center gap-0.5 text-[#9b6de0] text-[8px] font-bold">
-                      <Zap className="size-2.5" />Ready
-                    </span>
-                  )}
-                </div>
+                <span className="text-[10px] text-[#8b7d6b] leading-snug">{ab.description}</span>
               </div>
             ))}
           </div>
