@@ -5,7 +5,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Crown, ChevronLeft, Zap,
+  Crown, ChevronLeft, Swords, Shield, Heart, Zap,
   X, Bot, User, Info, Layers, Play,
 } from "lucide-react";
 import type { Piece, DeckConfig, Player } from "../../types/game";
@@ -43,7 +43,7 @@ const PLAYER_CFG: Record<Player, { label: string; color: string }> = {
 };
 
 const FACTION_COLOR: Record<string, string> = {
-  Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0", Fire: "#e05c2a",
+  Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0",
 };
 
 // ─── Ornate divider ───────────────────────────────────────────
@@ -73,7 +73,7 @@ function CapturedPieces({
 
   return (
     <div className="flex flex-col items-center gap-1 w-full">
-      <div className="flex flex-wrap justify-center gap-0.5 max-w-13">
+      <div className="flex flex-wrap justify-center gap-0.5 max-w-[52px]">
         {captured.map((r, i) => {
           const def = getPieceDefinitionById(r.capturedDefinitionId!);
           return (
@@ -84,9 +84,10 @@ function CapturedPieces({
                 fontSize: 10,
                 lineHeight: 1,
                 opacity: 0.75,
-                filter: capturedByPlayer === "white"
-                  ? "none"
-                  : "invert(1) brightness(2)",
+                color: capturedByPlayer === "white" ? "#1e2535" : "#fdfbf7",
+                background: capturedByPlayer === "white" ? "transparent" : "rgba(30,37,53,0.85)",
+                borderRadius: 3,
+                padding: capturedByPlayer === "white" ? 0 : "0 2px",
               }}
             >
               {def.symbol}
@@ -149,7 +150,13 @@ function MoveHistoryMini({
             {/* Player dot */}
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
             {/* Piece symbol */}
-            <span style={{ fontSize: 9, lineHeight: 1, filter: isWhite ? "none" : "invert(1) brightness(1.8)" }}>
+            <span style={{
+              fontSize: 9, lineHeight: 1,
+              color: isWhite ? "#1e2535" : "#fdfbf7",
+              background: isWhite ? "transparent" : "rgba(30,37,53,0.85)",
+              borderRadius: 3,
+              padding: isWhite ? 0 : "0 2px",
+            }}>
               {def?.symbol ?? "?"}
             </span>
             {/* Action */}
@@ -282,8 +289,17 @@ function PlayerCard({
 }
 
 // ─── Floating Piece Info Panel ────────────────────────────────
-function PiecePanel({ piece, isEnemy = false, onClose }: {
-  piece: Piece; isEnemy?: boolean; onClose: () => void;
+// Abilities that require the player to manually pick a target tile
+const TARGETED_ABILITIES = new Set(["royal_swap", "royal_teleport"]);
+
+function PiecePanel({
+  piece, isEnemy = false, activeAbilityId, onActivateAbility, onClose,
+}: {
+  piece: Piece;
+  isEnemy?: boolean;
+  activeAbilityId?: string | null;
+  onActivateAbility?: (abilityId: string) => void;
+  onClose: () => void;
 }) {
   const def   = getPieceDefinitionById(piece.definitionId);
   const fc    = FACTION_COLOR[def.faction] ?? "#c9a84c";
@@ -312,7 +328,7 @@ function PiecePanel({ piece, isEnemy = false, onClose }: {
       >
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0"
-          style={{ background: `${fc}15`, border: `1.5px solid ${fc}40` }}
+          style={{ background: `${fc}15`, border: `1.5px solid ${fc}40`, color: "#1e2535" }}
         >
           {def.symbol}
         </div>
@@ -356,30 +372,44 @@ function PiecePanel({ piece, isEnemy = false, onClose }: {
         {piece.abilities.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <span className="text-[9px] uppercase tracking-wider text-[#8b7d6b]">Abilities</span>
-            {piece.abilities.map(ab => (
-              <div
-                key={ab.id}
-                className="flex flex-col gap-1 px-2.5 py-2 rounded-lg"
-                style={{
-                  background: ab.currentCooldown > 0 ? "rgba(0,0,0,0.03)" : "rgba(155,109,224,0.08)",
-                  border: `1px solid ${ab.currentCooldown > 0 ? "rgba(0,0,0,0.06)" : "rgba(155,109,224,0.28)"}`,
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-semibold text-[#1e3a6e]">{ab.name}</span>
-                  <div className="shrink-0">
-                    {ab.currentCooldown > 0 ? (
-                      <span className="text-[8px] text-[#8b7d6b]">CD {ab.currentCooldown}</span>
-                    ) : (
-                      <span className="flex items-center gap-0.5 text-[#9b6de0] text-[8px] font-bold">
-                        <Zap className="size-2.5" />Ready
-                      </span>
-                    )}
+            {piece.abilities.map(ab => {
+              const isTargeted = TARGETED_ABILITIES.has(ab.id);
+              const isActive   = activeAbilityId === ab.id;
+
+              return (
+                <div
+                  key={ab.id}
+                  className="flex flex-col gap-1 px-2.5 py-2 rounded-lg"
+                  style={{
+                    background: isActive
+                      ? "rgba(155,109,224,0.18)"
+                      : ab.currentCooldown > 0 ? "rgba(0,0,0,0.03)" : "rgba(155,109,224,0.08)",
+                    border: `1px solid ${isActive ? "rgba(155,109,224,0.55)" : ab.currentCooldown > 0 ? "rgba(0,0,0,0.06)" : "rgba(155,109,224,0.28)"}`,
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-[#1e3a6e]">{ab.name}</span>
+                    <div className="shrink-0">
+                      {ab.currentCooldown > 0 ? (
+                        <span className="text-[8px] text-[#8b7d6b]">CD {ab.currentCooldown}</span>
+                      ) : (
+                        <span className="flex items-center gap-0.5 text-[#9b6de0] text-[8px] font-bold">
+                          <Zap className="size-2.5" />Ready
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  <span className="text-[8px] text-[#8b7d6b] leading-snug">{ab.description}</span>
+
+                  {/* Hint — purple targets are already shown on the board, no click needed */}
+                  {!isEnemy && isTargeted && isActive && (
+                    <span className="text-[8px] text-[#9b6de0] font-semibold mt-0.5">
+                      ✦ Purple tiles on the board — click one
+                    </span>
+                  )}
                 </div>
-                <span className="text-[10px] text-[#8b7d6b] leading-snug">{ab.description}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -436,7 +466,7 @@ function WinOverlay({ winner, isDraw = false, reason = "captured", onRematch, on
           </h2>
           <OrnDivider />
           <p className="text-[10px] text-[#8b7d6b] italic font-serif mt-1">
-            &quot;The board is a battlefield of souls.&quot;
+            "The board is a battlefield of souls."
           </p>
         </div>
         <div className="flex gap-2.5 w-full">
@@ -566,7 +596,8 @@ function BattleView({
 
   const {
     state, selectPiece, deselect, movePiece, attackPiece,
-    selectedPiece, validMoveKeys, validAttackKeys, isAITurn,
+    activateAbility, useAbility,
+    selectedPiece, validMoveKeys, validAttackKeys, validAbilityKeys, isAITurn,
   } = useGameState({ whiteDeck, blackDeck, aiPlayers, aiDelay: 600 });
 
   const { currentPlayer, turnNumber, phase, winner } = state;
@@ -597,6 +628,16 @@ function BattleView({
   }, [selectedPiece?.id]);
 
   const handleTileClick = useCallback((row: number, col: number, piece: Piece | null) => {
+    // ── Ability target mode (Royal Swap / Royal Teleport) ─────
+    if (state.activeAbilityId && state.selectedPieceId) {
+      const key = coordKey({ row, col });
+      if (validAbilityKeys.has(key)) {
+        useAbility({ row, col });
+        return;
+      }
+      // Clicked outside valid targets — cancel ability mode, fall through to normal handling
+    }
+
     // Always allow viewing any piece info regardless of whose turn it is
     if (piece && piece.owner !== currentPlayer) {
       // Enemy piece clicked
@@ -633,8 +674,8 @@ function BattleView({
     sfx.invalid();
     deselect();
   }, [
-    isAITurn, phase, mode, currentPlayer, humanPlayer, state.selectedPieceId,
-    validMoveKeys, validAttackKeys, movePiece, attackPiece, selectPiece, deselect,
+    isAITurn, phase, mode, currentPlayer, humanPlayer, state.selectedPieceId, state.activeAbilityId,
+    validMoveKeys, validAttackKeys, validAbilityKeys, movePiece, attackPiece, useAbility, selectPiece, deselect,
   ]);
 
   // Piece counts
@@ -834,6 +875,8 @@ function BattleView({
             <PiecePanel
               piece={(selectedPiece ?? viewingPiece)!}
               isEnemy={!selectedPiece && viewingPiece !== null}
+              activeAbilityId={state.activeAbilityId}
+              onActivateAbility={selectedPiece ? activateAbility : undefined}
               onClose={() => {
                 setPanelOpen(false);
                 setViewingPiece(null);

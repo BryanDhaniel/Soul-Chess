@@ -71,21 +71,46 @@ export function useGameState({
     const ai = aiRef.current[state.currentPlayer];
     if (!ai) return;
 
+    const turnSnapshot = state.turnNumber;
+    const playerSnapshot = state.currentPlayer;
+
     const timer = setTimeout(() => {
       const move = ai.chooseMove(state, state.currentPlayer);
-      if (!move) return;
 
-      if (move.kind === "attack") {
-        dispatch({ type: "SELECT_PIECE", pieceId: move.pieceId });
-        setTimeout(() => dispatch({ type: "ATTACK_PIECE", targetId: move.targetId }), 50);
-      } else {
-        dispatch({ type: "SELECT_PIECE", pieceId: move.pieceId });
-        setTimeout(() => dispatch({ type: "MOVE_PIECE", to: move.to }), 50);
+      if (!move) {
+        // AI genuinely has no moves — this should have been caught as
+        // stalemate by the engine already, but as a safety net we force
+        // a deselect so the UI doesn't hang on "AI Thinking..." forever.
+        dispatch({ type: "DESELECT" });
+        return;
       }
+
+      dispatch({ type: "SELECT_PIECE", pieceId: move.pieceId });
+
+      // Use a microtask-safe delay; re-validate the move is still legal
+      // right before dispatching (state may have shifted between ticks).
+      setTimeout(() => {
+        if (move.kind === "attack") {
+          dispatch({ type: "ATTACK_PIECE", targetId: move.targetId });
+        } else {
+          dispatch({ type: "MOVE_PIECE", to: move.to });
+        }
+      }, 50);
     }, aiDelay);
 
-    return () => clearTimeout(timer);
-  }, [state.currentPlayer, state.phase, state.winner, state.turnNumber, aiDelay]);
+    // Safety watchdog: if after (aiDelay + 2000ms) it's STILL this AI's turn
+    // with the same turn number, something went wrong (e.g. AI proposed an
+    // illegal move that the reducer silently rejected). Force-skip this
+    // piece's turn entirely so the game doesn't hang forever.
+    const watchdog = setTimeout(() => {
+      dispatch({ type: "FORCE_SKIP_TURN", player: playerSnapshot, turn: turnSnapshot });
+    }, aiDelay + 2000);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(watchdog);
+    };
+  }, [state.currentPlayer, state.phase, state.winner, state.turnNumber, state.selectedPieceId, aiDelay]);
 
   // ── Human dispatchers ─────────────────────────────────────
   const selectPiece = useCallback((pieceId: string) => {
@@ -108,6 +133,16 @@ export function useGameState({
     [],
   );
 
+  const activateAbility = useCallback(
+    (abilityId: string) => dispatch({ type: "ACTIVATE_ABILITY", abilityId }),
+    [],
+  );
+
+  const useAbility = useCallback(
+    (target: Coord) => dispatch({ type: "USE_ABILITY", target }),
+    [],
+  );
+
   // ── Derived ───────────────────────────────────────────────
   const selectedPiece = state.selectedPieceId
     ? (state.pieces[state.selectedPieceId] ?? null)
@@ -123,6 +158,11 @@ export function useGameState({
     [state.validAttacks],
   );
 
+  const validAbilityKeys = useMemo(
+    () => new Set(state.validAbilityTargets.map(c => `${c.row}-${c.col}`)),
+    [state.validAbilityTargets],
+  );
+
   const isAITurn = Boolean(aiRef.current[state.currentPlayer]);
 
   return {
@@ -131,9 +171,12 @@ export function useGameState({
     deselect,
     movePiece,
     attackPiece,
+    activateAbility,
+    useAbility,
     selectedPiece,
     validMoveKeys,
     validAttackKeys,
+    validAbilityKeys,
     isAITurn,
   };
 }

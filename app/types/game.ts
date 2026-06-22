@@ -50,6 +50,15 @@ export interface Piece {
   hasActed: boolean;
   abilities: Ability[];
   buffs: Buff[];
+  /** Fortify (Rook): true once it has blocked an attack — ability spent */
+  fortifyUsed?: boolean;
+  /** Fortify: true for the remainder of the turn it was triggered, consumed on next incoming attack */
+  fortifyArmed?: boolean;
+  /** Soul Mimic (Pawn): the definitionId it is currently disguised as, and the turn number it reverts on */
+  mimicDefinitionId?: string;
+  mimicRevertTurn?: number;
+  /** Original definitionId before mimicry, so we know what to revert to */
+  baseDefinitionId?: string;
 }
 
 // ─── Buff ────────────────────────────────────────────────────
@@ -121,7 +130,10 @@ export interface GameState {
 
 // ─── Actions ─────────────────────────────────────────────────
 export type GameAction =
-  | { type: "SELECT_PIECE"; pieceId: string }
-  | { type: "MOVE_PIECE";   to: Coord }
-  | { type: "ATTACK_PIECE"; targetId: string }
-  | { type: "DESELECT" };
+  | { type: "SELECT_PIECE";     pieceId: string }
+  | { type: "MOVE_PIECE";       to: Coord }
+  | { type: "ATTACK_PIECE";     targetId: string }
+  | { type: "ACTIVATE_ABILITY"; abilityId: string }
+  | { type: "USE_ABILITY";      target: Coord }
+  | { type: "DESELECT" }
+  | { type: "FORCE_SKIP_TURN";  player: Player; turn: number };

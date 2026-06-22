@@ -10,6 +10,12 @@ import {
 } from "./boardUtils";
 import { getPieceDefinitionById } from "./pieceRegistry";
 
+// ─── Tile colour helper (for Bishop Color Bind) ──────────────
+// Standard chess square colouring: (row + col) even = light, odd = dark
+function tileColor(coord: Coord): "light" | "dark" {
+  return (coord.row + coord.col) % 2 === 0 ? "light" : "dark";
+}
+
 // ─── Piece factory ───────────────────────────────────────────
 let _uid = 0;
 function makePiece(definitionId: string, owner: Player, position: Coord): Piece {
@@ -68,11 +74,19 @@ function syncBoard(board: Tile[][], pieces: Record<string, Piece>): Tile[][] {
 }
 
 // ─── Movement ────────────────────────────────────────────────
-function pawnDir(owner: Player) { return owner === "white" ? -1 : 1; }
+// Pawn direction is defined as [-1,0,1] assuming WHITE moves toward row 0.
+// Only black needs to be flipped (+1, moving toward row 15).
+function pawnDir(owner: Player) { return owner === "white" ? 1 : -1; }
 
-function calcMoves(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
-  const def  = getPieceDefinitionById(piece.definitionId);
-  const flip = piece.definitionId === "iron_pawn" ? pawnDir(piece.owner) : 1;
+// effective definitionId — Soul Mimic disguise overrides movement/attacks
+function effectiveDefId(piece: Piece): string {
+  return piece.mimicDefinitionId ?? piece.definitionId;
+}
+
+export function calcMoves(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
+  const defId = effectiveDefId(piece);
+  const def   = getPieceDefinitionById(defId);
+  const flip  = defId === "iron_pawn" ? pawnDir(piece.owner) : 1;
   const valid: Coord[] = [];
 
   for (const [dr, dc, maxSteps] of def.movement.directions) {
@@ -89,9 +103,10 @@ function calcMoves(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
   return valid;
 }
 
-function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
-  const def  = getPieceDefinitionById(piece.definitionId);
-  const flip = piece.definitionId === "iron_pawn" ? pawnDir(piece.owner) : 1;
+export function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
+  const defId = effectiveDefId(piece);
+  const def   = getPieceDefinitionById(defId);
+  const flip  = defId === "iron_pawn" ? pawnDir(piece.owner) : 1;
   const valid: Coord[] = [];
 
   for (const [dr, dc, maxSteps] of def.movement.directions) {
@@ -102,32 +117,76 @@ function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[] {
       if (!isInBounds(r, c) || !isInsideOctagon(r, c)) break;
       const target = pieceMap.get(coordKey({ row: r, col: c }));
       if (target) {
-        if (target.owner !== piece.owner) valid.push({ row: r, col: c });
+        if (target.owner !== piece.owner && isAttackable(piece, target)) {
+          valid.push({ row: r, col: c });
+        }
         if (!def.movement.canLeap) break;
       }
     }
   }
 
-  // Pawn: diagonal forward attacks only
-  if (piece.definitionId === "iron_pawn") {
+  // Pawn (or mimicked pawn): diagonal forward attacks only
+  if (defId === "iron_pawn") {
     const dir = pawnDir(piece.owner);
     for (const dc of [-1, 1]) {
       const r = piece.position.row + dir;
       const c = piece.position.col + dc;
       if (!isInBounds(r, c) || !isInsideOctagon(r, c)) continue;
       const t = pieceMap.get(coordKey({ row: r, col: c }));
-      if (t && t.owner !== piece.owner) valid.push({ row: r, col: c });
+      if (t && t.owner !== piece.owner && isAttackable(piece, t)) {
+        valid.push({ row: r, col: c });
+      }
     }
   }
   return valid;
 }
 
+// ─── Color Bind check ────────────────────────────────────────
+// Bishop passive: can only be captured by an attacker standing on
+// the same square colour (light/dark) as the Bishop itself.
+// Also respects Soul Mimic — if a piece is disguised as a Bishop, it inherits Color Bind.
+function isAttackable(attacker: Piece, defender: Piece): boolean {
+  if (effectiveDefId(defender) !== "wraith_bishop") return true;
+  return tileColor(attacker.position) === tileColor(defender.position);
+}
+
+// ─── Ability target calculation ──────────────────────────────
+// Returns valid ability targets for the given piece + ability.
+function calcAbilityTargets(
+  piece: Piece, abilityId: string, pieces: Record<string, Piece>,
+): Coord[] {
+  if (abilityId === "royal_swap") {
+    // Any friendly piece other than this King
+    return Object.values(pieces)
+      .filter(p => p.owner === piece.owner && p.id !== piece.id)
+      .map(p => p.position);
+  }
+
+  if (abilityId === "royal_teleport") {
+    // Any empty tile on the board
+    const occupied = new Set(Object.values(pieces).map(p => coordKey(p.position)));
+    const targets: Coord[] = [];
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        if (!isInsideOctagon(r, c)) continue;
+        const coord = { row: r, col: c };
+        if (!occupied.has(coordKey(coord))) targets.push(coord);
+      }
+    }
+    return targets;
+  }
+
+  return [];
+}
+
 // ─── Auto-switch ─────────────────────────────────────────────
 function switchPlayer(state: GameState): GameState {
   const next: Player = state.currentPlayer === "white" ? "black" : "white";
+  const turnNumber = next === "white" ? state.turnNumber + 1 : state.turnNumber;
+
   const newPieces: Record<string, Piece> = {};
   for (const [id, p] of Object.entries(state.pieces)) {
-    newPieces[id] = {
+    let piece: Piece = {
       ...p, hasActed: false,
       buffs: p.buffs
         .map(b => ({ ...b, duration: b.duration === -1 ? -1 : b.duration - 1 }))
@@ -136,11 +195,27 @@ function switchPlayer(state: GameState): GameState {
         ...ab, currentCooldown: Math.max(0, ab.currentCooldown - 1),
       })),
     };
+
+    // Soul Mimic revert check — disguise ends once we reach the stored revert turn
+    if (piece.mimicDefinitionId && piece.mimicRevertTurn !== undefined) {
+      if (turnNumber >= piece.mimicRevertTurn) {
+        piece = {
+          ...piece,
+          definitionId: piece.baseDefinitionId ?? piece.definitionId,
+          mimicDefinitionId: undefined,
+          mimicRevertTurn: undefined,
+          baseDefinitionId: undefined,
+        };
+      }
+    }
+
+    newPieces[id] = piece;
   }
+
   const nextState: GameState = {
     ...state,
     currentPlayer: next,
-    turnNumber: next === "white" ? state.turnNumber + 1 : state.turnNumber,
+    turnNumber,
     pieces: newPieces,
     board: syncBoard(clearHighlights(state.board), newPieces),
     selectedPieceId: null,
@@ -175,25 +250,8 @@ function checkStalemate(state: GameState): boolean {
   const pieceMap = buildPieceMap(state.pieces);
 
   for (const piece of myPieces) {
-    const def  = getPieceDefinitionById(piece.definitionId);
-    const flip = piece.definitionId === "iron_pawn" ? pawnDir(piece.owner) : 1;
-
-    // Check moves
-    for (const [dr, dc, maxSteps] of def.movement.directions) {
-      const steps = maxSteps === 0 ? GRID_SIZE : maxSteps;
-      for (let s = 1; s <= steps; s++) {
-        const r = piece.position.row + dr * flip * s;
-        const c = piece.position.col + dc * s;
-        if (!isInBounds(r, c) || !isInsideOctagon(r, c)) break;
-        const blocker = pieceMap.get(coordKey({ row: r, col: c }));
-        if (!blocker) return false; // found at least one valid move
-        if (!def.movement.canLeap) break;
-      }
-    }
-
-    // Check attacks (including pawn diagonal)
-    const attacks = calcAttacks(piece, pieceMap);
-    if (attacks.length > 0) return false; // found at least one valid attack
+    if (calcMoves(piece, pieceMap).length > 0) return false;
+    if (calcAttacks(piece, pieceMap).length > 0) return false;
   }
 
   return true; // no moves and no attacks → stalemate
@@ -236,19 +294,110 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const pieceMap = buildPieceMap(state.pieces);
       const moves   = calcMoves(piece, pieceMap);
       const attacks = calcAttacks(piece, pieceMap);
+
+      // Auto-merge ability targets for King (swap) / Queen (teleport) — no activation step needed
+      let abilityTargets: Coord[] = [];
+      let abilityId: string | null = null;
+      const autoAbility = piece.abilities.find(
+        a => (a.id === "royal_swap" || a.id === "royal_teleport") && a.currentCooldown === 0
+      );
+      if (autoAbility) {
+        abilityTargets = calcAbilityTargets(piece, autoAbility.id, state.pieces);
+        abilityId = autoAbility.id;
+      }
+
       return {
         ...state, selectedPieceId: piece.id,
         validMoves: moves, validAttacks: attacks,
-        board: applyHighlights(clearHighlights(state.board), piece.position, moves, attacks, []),
+        validAbilityTargets: abilityTargets, activeAbilityId: abilityId,
+        board: applyHighlights(clearHighlights(state.board), piece.position, moves, attacks, abilityTargets),
       };
     }
 
     case "DESELECT":
       return {
         ...state, selectedPieceId: null,
-        validMoves: [], validAttacks: [], validAbilityTargets: [],
+        validMoves: [], validAttacks: [], validAbilityTargets: [], activeAbilityId: null,
         board: clearHighlights(state.board),
       };
+
+    // ── Activate an ability: enters "pick a target" mode ─────
+    case "ACTIVATE_ABILITY": {
+      if (!state.selectedPieceId || state.phase !== "battle") return state;
+      const piece = state.pieces[state.selectedPieceId];
+      if (!piece || piece.hasActed) return state;
+
+      const ability = piece.abilities.find(a => a.id === action.abilityId);
+      if (!ability || ability.currentCooldown > 0) return state;
+
+      // Only Royal Swap & Royal Teleport need manual target selection
+      if (action.abilityId !== "royal_swap" && action.abilityId !== "royal_teleport") {
+        return state;
+      }
+
+      const targets = calcAbilityTargets(piece, action.abilityId, state.pieces);
+      if (targets.length === 0) return state; // no valid targets, can't activate
+
+      return {
+        ...state,
+        activeAbilityId: action.abilityId,
+        validAbilityTargets: targets,
+        validMoves: [], validAttacks: [],
+        board: applyHighlights(clearHighlights(state.board), piece.position, [], [], targets),
+      };
+    }
+
+    // ── Execute the active ability on a chosen target ────────
+    case "USE_ABILITY": {
+      if (!state.selectedPieceId || !state.activeAbilityId || state.phase !== "battle") return state;
+      const piece = state.pieces[state.selectedPieceId];
+      if (!piece || piece.hasActed) return state;
+      if (!state.validAbilityTargets.some(t => coordsEqual(t, action.target))) return state;
+
+      const abilityId = state.activeAbilityId;
+      const ability = piece.abilities.find(a => a.id === abilityId)!;
+
+      let newPieces = { ...state.pieces };
+      let record: TurnRecord;
+
+      if (abilityId === "royal_swap") {
+        // Find the friendly piece standing on the target tile
+        const partner = Object.values(state.pieces).find(
+          p => coordsEqual(p.position, action.target) && p.owner === piece.owner
+        );
+        if (!partner) return state;
+
+        newPieces[piece.id]   = { ...piece, position: partner.position, hasActed: true };
+        newPieces[partner.id] = { ...partner, position: piece.position };
+
+        record = {
+          turn: state.turnNumber, player: state.currentPlayer,
+          action: "attack", pieceId: piece.id, pieceDefinitionId: piece.definitionId,
+          from: piece.position, to: partner.position,
+        };
+      } else if (abilityId === "royal_teleport") {
+        newPieces[piece.id] = { ...piece, position: action.target, hasActed: true };
+
+        record = {
+          turn: state.turnNumber, player: state.currentPlayer,
+          action: "move", pieceId: piece.id, pieceDefinitionId: piece.definitionId,
+          from: piece.position, to: action.target,
+        };
+      } else {
+        return state; // unsupported ability via this path
+      }
+
+      // Put ability on cooldown
+      newPieces[piece.id] = {
+        ...newPieces[piece.id],
+        abilities: newPieces[piece.id].abilities.map(a =>
+          a.id === abilityId ? { ...a, currentCooldown: ability.cooldown } : a
+        ),
+      };
+
+      const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
+      return { ...next, winner: checkWin(next) };
+    }
 
     case "MOVE_PIECE": {
       if (!state.selectedPieceId || state.phase !== "battle") return state;
@@ -264,7 +413,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       const moved: Piece = { ...piece, position: dest, hasActed: true };
-      const landTile = state.board[dest.row][dest.col];
 
       const record: TurnRecord = {
         turn: state.turnNumber, player: state.currentPlayer,
@@ -284,10 +432,47 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!attacker || !defender || attacker.hasActed) return state;
       if (!state.validAttacks.some(a => coordsEqual(a, defender.position))) return state;
 
-      // 1-hit capture — chess style, no HP
+      // ── Fortify (Void Rook) — block this attack once ──────
+      if (effectiveDefId(defender) === "void_rook" && !defender.fortifyUsed) {
+        const fortify = defender.abilities.find(a => a.id === "fortify");
+        if (fortify) {
+          // Consume Fortify: defender survives, attacker still uses its action
+          const newPieces = {
+            ...state.pieces,
+            [defender.id]: { ...defender, fortifyUsed: true },
+            [attacker.id]: { ...attacker, hasActed: true },
+          };
+          const record: TurnRecord = {
+            turn: state.turnNumber, player: state.currentPlayer,
+            action: "attack", pieceId: attacker.id,
+            pieceDefinitionId: attacker.definitionId,
+            from: attacker.position, to: defender.position,
+            // No capturedPieceId — the attack was blocked
+          };
+          const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
+          return { ...next, winner: checkWin(next) };
+        }
+      }
+
+      // ── Normal 1-hit capture — attacker moves into defender's tile ──
       const newPieces = { ...state.pieces };
       delete newPieces[defender.id];
-      newPieces[attacker.id] = { ...attacker, hasActed: true };
+
+      let updatedAttacker: Piece = {
+        ...attacker, hasActed: true, position: defender.position,
+      };
+
+      // ── Soul Mimic (Iron Pawn) — disguise as the captured piece for 1 turn ──
+      if (attacker.definitionId === "iron_pawn" && defender.definitionId !== "soul_king") {
+        updatedAttacker = {
+          ...updatedAttacker,
+          baseDefinitionId: attacker.baseDefinitionId ?? attacker.definitionId,
+          mimicDefinitionId: defender.definitionId,
+          mimicRevertTurn: state.turnNumber + 2, // reverts at the start of attacker's NEXT turn
+        };
+      }
+
+      newPieces[attacker.id] = updatedAttacker;
 
       const record: TurnRecord = {
         turn: state.turnNumber, player: state.currentPlayer,
@@ -297,9 +482,54 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         capturedPieceId: defender.id,
         capturedDefinitionId: defender.definitionId,
       };
+
+      // ── Flanking Strike (Arcane Knight) — move again after capturing ──
+      if (attacker.definitionId === "arcane_knight") {
+        const pieceMap = buildPieceMap(newPieces);
+        const extraMoves = calcMoves({ ...updatedAttacker, hasActed: false }, pieceMap);
+        const extraAttacks = calcAttacks({ ...updatedAttacker, hasActed: false }, pieceMap);
+
+        if (extraMoves.length > 0 || extraAttacks.length > 0) {
+          // Grant one more action — un-mark hasActed, stay selected, don't switch turn
+          newPieces[attacker.id] = { ...updatedAttacker, hasActed: false };
+          return {
+            ...state,
+            pieces: newPieces,
+            selectedPieceId: attacker.id,
+            validMoves: extraMoves,
+            validAttacks: extraAttacks,
+            validAbilityTargets: [], activeAbilityId: null,
+            board: applyHighlights(
+              syncBoard(clearHighlights(state.board), newPieces),
+              updatedAttacker.position, extraMoves, extraAttacks, [],
+            ),
+            history: [...state.history, record],
+            winner: checkWin({ ...state, pieces: newPieces }),
+          };
+        }
+      }
+
       const next = switchPlayer({ ...state, pieces: newPieces, history: [...state.history, record] });
       const winner = checkWin(next);
       return { ...next, winner, phase: winner ? "ended" : next.phase };
+    }
+
+    // ── Watchdog recovery: AI got stuck, forcibly pass its turn ──
+    case "FORCE_SKIP_TURN": {
+      // Only act if we're still on the exact same player+turn the
+      // watchdog was armed for — otherwise the game already moved on
+      // normally and this is a stale timer firing late.
+      if (state.currentPlayer !== action.player || state.turnNumber !== action.turn) {
+        return state;
+      }
+      if (state.phase !== "battle") return state;
+
+      const cleared: GameState = {
+        ...state,
+        selectedPieceId: null,
+        validMoves: [], validAttacks: [], validAbilityTargets: [], activeAbilityId: null,
+      };
+      return switchPlayer(cleared);
     }
 
     default:

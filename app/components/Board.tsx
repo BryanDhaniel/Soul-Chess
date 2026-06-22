@@ -99,7 +99,6 @@ function PieceTokenVisual({
   const fc      = FACTION_COLOR[def.faction] ?? "#c9a84c";
   const size    = Math.max(14, cellSize * 0.72);
   const fs      = Math.max(8, size * 0.48);
-  const hpPct   = def.maxHp > 0 ? (piece.hp / piece.maxHp) * 100 : 100;
   const isWhite = piece.owner === "white";
 
   return (
@@ -128,36 +127,25 @@ function PieceTokenVisual({
           width: size, height: size, fontSize: fs, lineHeight: 1,
           background: isWhite
             ? "linear-gradient(135deg,#fdfbf7 0%,#e8e0d0 100%)"
-            : "linear-gradient(135deg,#1e2535 0%,#0d111a 100%)",
-          border: `1.5px solid ${isSelected ? fc : isWhite ? "#c9a84c80" : "#5a6a8060"}`,
+            : "linear-gradient(135deg,#3a4258 0%,#1a1f30 100%)",
+          border: `1.5px solid ${isSelected ? fc : isWhite ? "#c9a84c80" : "#9babcc"}`,
           boxShadow: isSelected
             ? `0 0 0 2px ${fc}, ${TIER_SHADOW[def.tier]}`
-            : TIER_SHADOW[def.tier],
+            : isWhite
+              ? TIER_SHADOW[def.tier]
+              : `0 0 0 1px rgba(255,255,255,0.15), 0 2px 6px rgba(0,0,0,0.5), ${TIER_SHADOW[def.tier]}`,
           // Slight lift when selected
           transform: isSelected ? "scale(1.08)" : "scale(1)",
           transition: `transform 150ms ease`,
         }}
       >
-        <span style={{ filter: isWhite ? "none" : "invert(1) brightness(1.8)", display: "block", marginTop: 1 }}>
+        <span style={{
+          display: "block", marginTop: 1,
+          color: isWhite ? "#1e2535" : "#f0f3fa",
+        }}>
           {def.symbol}
         </span>
       </div>
-
-      {/* HP bar */}
-      {def.maxHp > 0 && (
-        <div
-          className="absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-full overflow-hidden"
-          style={{ width: size * 0.85, height: Math.max(2, cellSize * 0.06), background: "#00000040" }}
-        >
-          <div
-            className="h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${hpPct}%`,
-              background: hpPct > 60 ? "#4ade80" : hpPct > 30 ? "#facc15" : "#f87171",
-            }}
-          />
-        </div>
-      )}
 
       {/* Owner dot */}
       <div
@@ -226,26 +214,31 @@ export function Board({ state, onTileClick, flipped = false }: BoardProps) {
           // Start at previous position, will animate to target via CSS transition
           next.set(id, { piece, x: prevPos.x, y: prevPos.y, animating: true, capturing: false, dying: false });
 
+          // Capture values now — avoids stale closures if multiple moves fire in quick succession (e.g. Flanking Strike chains)
+          const targetX = target.x;
+          const targetY = target.y;
+          const pieceId = id;
+
           // After one frame, update to target so CSS transition fires
-          setTimeout(() => {
+          requestAnimationFrame(() => {
             setAnimMap(m => {
-              const ap = m.get(id);
+              const ap = m.get(pieceId);
               if (!ap) return m;
               const n = new Map(m);
-              n.set(id, { ...ap, x: target.x, y: target.y });
+              n.set(pieceId, { ...ap, x: targetX, y: targetY });
               return n;
             });
             // Clear animating flag after transition completes
             setTimeout(() => {
               setAnimMap(m => {
-                const ap = m.get(id);
+                const ap = m.get(pieceId);
                 if (!ap) return m;
                 const n = new Map(m);
-                n.set(id, { ...ap, animating: false });
+                n.set(pieceId, { ...ap, animating: false });
                 return n;
               });
             }, ANIM_MS + 20);
-          }, 16);
+          });
         } else {
           // No move — keep current pixel position (may have updated stats)
           const existing = oldMap.get(id);
@@ -341,7 +334,8 @@ export function Board({ state, onTileClick, flipped = false }: BoardProps) {
             }
 
             const piece   = pieceByCoord.get(coordKey(tile.coord)) ?? null;
-            const hlStyle = HL[tile.highlight] ?? {};
+            const isTeleportTarget = tile.highlight === "ability" && state.activeAbilityId === "royal_teleport";
+            const hlStyle = isTeleportTarget ? HL.move : (HL[tile.highlight] ?? {});
             const efStyle = EFFECT_STYLE[tile.effect] ?? EFFECT_STYLE.none;
             const baseBg  = tile.isLight ? "#f8f4ec" : "#2c2c2c";
 
@@ -376,6 +370,35 @@ export function Board({ state, onTileClick, flipped = false }: BoardProps) {
                     className="absolute inset-0.5 pointer-events-none animate-pulse"
                     style={{ border: "2px solid rgba(248,113,113,0.85)", boxShadow: "0 0 8px rgba(248,113,113,0.4)" }}
                   />
+                )}
+
+                {/* Ability target indicator */}
+                {tile.highlight === "ability" && (
+                  state.activeAbilityId === "royal_teleport" ? (
+                    // Royal Teleport (Queen) — same plain dot style as a normal move
+                    <div
+                      className="absolute rounded-full pointer-events-none"
+                      style={{
+                        width:  Math.max(6, cellSize * 0.22),
+                        height: Math.max(6, cellSize * 0.22),
+                        background: "rgba(74,222,128,0.7)",
+                        boxShadow: "0 0 6px rgba(74,222,128,0.5)",
+                      }}
+                    />
+                  ) : (
+                    // Royal Swap (King) and any other targeted ability — diamond pulse
+                    <div
+                      className="absolute pointer-events-none animate-pulse"
+                      style={{
+                        width:  Math.max(8, cellSize * 0.3),
+                        height: Math.max(8, cellSize * 0.3),
+                        background: "rgba(155,109,224,0.75)",
+                        boxShadow: "0 0 8px rgba(155,109,224,0.55)",
+                        transform: "rotate(45deg)",
+                        borderRadius: 2,
+                      }}
+                    />
+                  )
                 )}
 
                 {/* Tile effect icon */}

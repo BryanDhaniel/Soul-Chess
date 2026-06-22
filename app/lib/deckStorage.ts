@@ -1,5 +1,5 @@
 // ============================================================
-// SOULCHESS — Deck Storage (localStorage)
+// SOULCHESS - Deck Storage (localStorage)
 // ============================================================
 import type { DeckConfig, FormationSlot, Coord } from "../types/game";
 import { isInsideOctagon } from "./boardUtils";
@@ -8,8 +8,8 @@ import { getAllDefinitions } from "./pieceRegistry";
 const DECKS_KEY  = "soulchess_decks";
 const ACTIVE_KEY = "soulchess_active_deck";
 
-// ─── Deployment zone ─────────────────────────────────────────
-// Stored coords are always in white's perspective (row 11–15).
+// --- Deployment zone ---
+// Stored coords are always in white's perspective (row 11-15).
 // Engine mirrors black's coords: boardRow = 15 - slot.coord.row
 export const WHITE_ZONE_MIN_ROW = 11;
 export const WHITE_ZONE_MAX_ROW = 15;
@@ -33,8 +33,8 @@ export function getDeckErrors(slots: FormationSlot[]): string[] {
   const errors: string[] = [];
   for (const [typeId, rule] of Object.entries(REQUIRED_PIECES)) {
     const count = slots.filter(s => s.definitionId === typeId).length;
-    if (count === 0) errors.push(`Missing ${rule.label} (required ×1)`);
-    if (count > rule.max) errors.push(`Too many ${rule.label} (max ×${rule.max})`);
+    if (count === 0) errors.push(`Missing ${rule.label} (required: 1)`);
+    if (count > rule.max) errors.push(`Too many ${rule.label} (max: ${rule.max})`);
   }
   if (slots.length < MAX_PIECES) errors.push(`Need ${MAX_PIECES - slots.length} more piece${MAX_PIECES - slots.length > 1 ? "s" : ""}`);
   return errors;
@@ -48,22 +48,26 @@ export function isInDeployZone(coord: Coord): boolean {
   );
 }
 
-// ─── Migration ───────────────────────────────────────────────
+// --- Migration ---
 // Older builds stored slots as { slotIndex, definitionId }.
 // Any slot without a valid { coord: { row, col } } is dropped.
+// It also checks against the active piece registry to drop removed piece definitions.
 function migrateDecks(raw: unknown[]): DeckConfig[] {
+  const validPieceIds = new Set(getAllDefinitions().map(def => def.typeId));
+
   return (raw as DeckConfig[]).map(deck => ({
     ...deck,
     slots: (deck.slots ?? []).filter(
       (s: FormationSlot) =>
         s.coord !== undefined &&
         typeof s.coord.row === "number" &&
-        typeof s.coord.col === "number"
+        typeof s.coord.col === "number" &&
+        validPieceIds.has(s.definitionId)
     ),
   }));
 }
 
-// ─── CRUD ────────────────────────────────────────────────────
+// --- CRUD ---
 export function loadDecks(): DeckConfig[] {
   if (typeof window === "undefined") return [];
   try {
@@ -100,29 +104,31 @@ export function deleteDeck(decks: DeckConfig[], id: string): DeckConfig[] {
   return decks.filter(d => d.id !== id);
 }
 
-// ─── Default starter deck ────────────────────────────────────
+// --- Default starter deck ---
+// 1 Soul King + 1 Soulbound Queen (required) + 18 free picks,
+// placed anywhere in white's deploy zone (rows 11-15).
 export function makeDefaultDeck(name: string): DeckConfig {
   const placements: Array<{ row: number; col: number; id: string }> = [
-    { row: 15, col: 5,  id: "void_rook"         },
-    { row: 15, col: 6,  id: "arcane_knight"      },
-    { row: 15, col: 7,  id: "wraith_bishop"      },
-    { row: 15, col: 8,  id: "soul_king"          },
-    { row: 15, col: 9,  id: "soulbound_queen"    },
-    { row: 15, col: 10, id: "wraith_bishop"      },
-    { row: 15, col: 11, id: "arcane_knight"      },
-    { row: 15, col: 12, id: "void_rook"          },
-    { row: 14, col: 5,  id: "stone_sentinel"     },
-    { row: 14, col: 6,  id: "storm_mage"         },
-    { row: 14, col: 7,  id: "phantom_assassin"   },
-    { row: 14, col: 8,  id: "ember_drake"        },
-    { row: 14, col: 9,  id: "ember_drake"        },
-    { row: 14, col: 10, id: "phantom_assassin"   },
-    { row: 14, col: 11, id: "storm_mage"         },
-    { row: 14, col: 12, id: "stone_sentinel"     },
-    { row: 13, col: 6,  id: "iron_pawn"          },
-    { row: 13, col: 7,  id: "iron_pawn"          },
-    { row: 13, col: 8,  id: "iron_pawn"          },
-    { row: 13, col: 9,  id: "iron_pawn"          },
+    { row: 15, col: 5,  id: "void_rook"       },
+    { row: 15, col: 6,  id: "arcane_knight"   },
+    { row: 15, col: 7,  id: "wraith_bishop"   },
+    { row: 15, col: 8,  id: "soul_king"       },
+    { row: 15, col: 9,  id: "soulbound_queen" },
+    { row: 15, col: 10, id: "wraith_bishop"   },
+    { row: 15, col: 11, id: "arcane_knight"   },
+    { row: 15, col: 12, id: "void_rook"       },
+    { row: 14, col: 5,  id: "iron_pawn"       },
+    { row: 14, col: 6,  id: "iron_pawn"       },
+    { row: 14, col: 7,  id: "iron_pawn"       },
+    { row: 14, col: 8,  id: "iron_pawn"       },
+    { row: 14, col: 9,  id: "iron_pawn"       },
+    { row: 14, col: 10, id: "iron_pawn"       },
+    { row: 14, col: 11, id: "iron_pawn"       },
+    { row: 14, col: 12, id: "iron_pawn"       },
+    { row: 13, col: 6,  id: "iron_pawn"       },
+    { row: 13, col: 7,  id: "iron_pawn"       },
+    { row: 13, col: 8,  id: "iron_pawn"       },
+    { row: 13, col: 9,  id: "iron_pawn"       },
   ];
 
   const slots: FormationSlot[] = placements.map(p => ({
@@ -133,11 +139,11 @@ export function makeDefaultDeck(name: string): DeckConfig {
   return { id: crypto.randomUUID(), name, slots };
 }
 
-// ─── Random AI deck ──────────────────────────────────────────
+// --- Random AI deck ---
 // Generates a fully random deck for the AI:
-//   - Exactly 1 soul_king + 1 soulbound_queen (required)
-//   - Remaining 18 slots filled with random pieces from the registry
-//   - Placed randomly across the deploy zone (rows 11–15)
+//  - Exactly 1 Soul King + 1 Soulbound Queen (required)
+//  - Remaining 18 slots filled with random pieces from the registry
+//  - Placed randomly across the deploy zone (rows 11-15)
 export function makeRandomDeck(name: string): DeckConfig {
   const allDefs = getAllDefinitions();
   const freePool = allDefs.filter(
@@ -150,9 +156,10 @@ export function makeRandomDeck(name: string): DeckConfig {
     const def = freePool[Math.floor(Math.random() * freePool.length)];
     pool.push(def.typeId);
   }
+
   const pieceIds = [...Object.keys(REQUIRED_PIECES), ...pool];
 
-  // Collect all valid deploy zone tiles (rows 11–15 inside octagon)
+  // Collect all valid deploy zone tiles (rows 11-15 inside octagon)
   const validCoords: Array<{ row: number; col: number }> = [];
   for (let r = WHITE_ZONE_MIN_ROW; r <= WHITE_ZONE_MAX_ROW; r++) {
     for (let c = 0; c < 16; c++) {

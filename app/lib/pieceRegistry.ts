@@ -1,5 +1,8 @@
 // ============================================================
-// SOULCHESS — Piece Registry (10 starter types)
+// SOULCHESS — Piece Registry
+// ============================================================
+// Gameplay is standard chess movement + custom skills.
+// Naming keeps the original fantasy flavour.
 // ============================================================
 import type { PieceDefinition } from "../types/game";
 
@@ -8,7 +11,8 @@ const DEFINITIONS: PieceDefinition[] = [
   // 1. SOUL KING ─────────────────────────────────────────────
   {
     typeId: "soul_king", name: "Soul King", faction: "Arcane", tier: 3,
-    description: "The linchpin of your army. Capture the enemy King to win.", symbol: "♔",
+    description: "Moves one tile in any direction. Capture the enemy Soul King to win.",
+    symbol: "♔",
     movement: {
       directions: [
         [-1,-1,1],[-1,0,1],[-1,1,1],
@@ -19,110 +23,18 @@ const DEFINITIONS: PieceDefinition[] = [
     },
     abilities: [
       {
-        id: "royal_guard", name: "Royal Guard",
-        description: "Gain +2 defense for 1 turn.",
+        id: "royal_swap", name: "Royal Swap",
+        description: "Swap places with any one friendly piece on the board (a piece must be available to swap with).",
         cooldown: 3, range: 0,
       },
     ],
   },
 
-  // 2. ARCANE KNIGHT ─────────────────────────────────────────
-  {
-    typeId: "arcane_knight", name: "Arcane Knight", faction: "Arcane", tier: 1,
-    description: "Leaps over pieces in an L-shape. Instant capture on contact.", symbol: "♞",
-    movement: {
-      directions: [
-        [-2,-1,1],[-2,1,1],[-1,-2,1],[-1,2,1],
-        [ 1,-2,1],[ 1,2,1],[ 2,-1,1],[ 2,1,1],
-      ],
-      canLeap: true,
-    },
-    abilities: [
-      {
-        id: "arcane_dash", name: "Arcane Dash",
-        description: "Move up to 3 tiles in a straight line, leaping over obstacles.",
-        cooldown: 2, range: 3,
-      },
-    ],
-  },
-
-  // 3. VOID ROOK ──────────────────────────────────────────────
-  {
-    typeId: "void_rook", name: "Void Rook", faction: "Void", tier: 2,
-    description: "A hulking siege engine. Slides orthogonally, absorbs punishment.", symbol: "♜",
-    movement: {
-      directions: [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0]],
-      canLeap: false,
-    },
-    abilities: [
-      {
-        id: "siege_pulse", name: "Siege Pulse",
-        description: "Deal 2 damage to all enemies in the same row or column.",
-        cooldown: 4, range: 0,
-      },
-    ],
-  },
-
-  // 4. WRAITH BISHOP ─────────────────────────────────────────
-  {
-    typeId: "wraith_bishop", name: "Wraith Bishop", faction: "Void", tier: 1,
-    description: "Drifts diagonally across the board. Destroys on contact.", symbol: "♝",
-    movement: {
-      directions: [[-1,-1,0],[-1,1,0],[1,-1,0],[1,1,0]],
-      canLeap: false,
-    },
-    abilities: [
-      {
-        id: "phase_shift", name: "Phase Shift",
-        description: "Pass through one piece when moving this turn.",
-        cooldown: 3, range: 0,
-      },
-    ],
-  },
-
-  // 5. STORM MAGE ────────────────────────────────────────────
-  {
-    typeId: "storm_mage", name: "Storm Mage", faction: "Arcane", tier: 2,
-    description: "Commands the storm. Moves in any direction up to 3 squares.", symbol: "✦",
-    movement: {
-      directions: [
-        [-1,-1,3],[-1,0,3],[-1,1,3],
-        [ 0,-1,3],          [ 0,1,3],
-        [ 1,-1,3],[ 1,0,3],[ 1,1,3],
-      ],
-      canLeap: false,
-    },
-    abilities: [
-      {
-        id: "lightning_bolt", name: "Lightning Bolt",
-        description: "Strike a target tile within range 4 for 3 damage.",
-        cooldown: 3, range: 4,
-      },
-    ],
-  },
-
-  // 6. IRON PAWN ─────────────────────────────────────────────
-  {
-    typeId: "iron_pawn", name: "Iron Pawn", faction: "Iron", tier: 1,
-    description: "Marches forward, strikes diagonally. The backbone of every army.", symbol: "♟",
-    movement: {
-      // Forward direction flipped per owner in engine (white = -1, black = +1)
-      directions: [[-1,0,1]],
-      canLeap: false,
-    },
-    abilities: [
-      {
-        id: "shield_wall", name: "Shield Wall",
-        description: "Adjacent friendly pawns gain +1 defense for 1 turn.",
-        cooldown: 2, range: 1,
-      },
-    ],
-  },
-
-  // 7. SOULBOUND QUEEN ───────────────────────────────────────
+  // 2. SOULBOUND QUEEN ───────────────────────────────────────
   {
     typeId: "soulbound_queen", name: "Soulbound Queen", faction: "Arcane", tier: 3,
-    description: "Unlimited movement in all directions. Devastating one-shot capture.", symbol: "♛",
+    description: "Slides unlimited distance in any direction.",
+    symbol: "♛",
     movement: {
       directions: [
         [-1,-1,0],[-1,0,0],[-1,1,0],
@@ -133,67 +45,88 @@ const DEFINITIONS: PieceDefinition[] = [
     },
     abilities: [
       {
-        id: "soul_shatter", name: "Soul Shatter",
-        description: "Destroy a target piece within range 3 regardless of HP.",
-        cooldown: 5, range: 3,
+        id: "royal_teleport", name: "Royal Teleport",
+        description: "Teleport to any empty tile on the board. Cannot be used to capture.",
+        cooldown: 4, range: 0,
       },
     ],
   },
 
-  // 8. EMBER DRAKE ───────────────────────────────────────────
+  // 3. VOID ROOK ─────────────────────────────────────────────
   {
-    typeId: "ember_drake", name: "Ember Drake", faction: "Fire", tier: 2,
-    description: "Charges forward or arcs diagonally. Breathes fire.", symbol: "🐉",
+    typeId: "void_rook", name: "Void Rook", faction: "Void", tier: 2,
+    description: "Slides unlimited distance horizontally or vertically.",
+    symbol: "♜",
     movement: {
-      directions: [
-        [-2,0,1],
-        [-1,-1,2],[-1,1,2],
-        [ 1,-1,2],[ 1,1,2],
-      ],
+      directions: [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0]],
       canLeap: false,
     },
     abilities: [
       {
-        id: "flame_breath", name: "Flame Breath",
-        description: "Deal 2 damage to all pieces in a 3-tile forward cone.",
-        cooldown: 3, range: 3,
+        id: "fortify", name: "Fortify",
+        description: "Block the next enemy attack against this Rook. Single use, then this ability is spent.",
+        cooldown: 0, range: 0,
       },
     ],
   },
 
-  // 9. PHANTOM ASSASSIN ──────────────────────────────────────
+  // 4. WRAITH BISHOP ─────────────────────────────────────────
   {
-    typeId: "phantom_assassin", name: "Phantom Assassin", faction: "Void", tier: 2,
-    description: "Leaps up to 2 tiles in any direction. Bypasses armor.", symbol: "☽",
+    typeId: "wraith_bishop", name: "Wraith Bishop", faction: "Void", tier: 2,
+    description: "Slides unlimited distance diagonally. Bound to its square colour — only an attacker standing on a matching coloured tile can capture it.",
+    symbol: "♝",
+    movement: {
+      directions: [[-1,-1,0],[-1,1,0],[1,-1,0],[1,1,0]],
+      canLeap: false,
+    },
+    abilities: [
+      {
+        id: "color_bind", name: "Color Bind",
+        description: "Passive — can only be captured by an attacker standing on a tile of the same colour (light/dark) as this Bishop.",
+        cooldown: 0, range: 0,
+      },
+    ],
+  },
+
+  // 5. ARCANE KNIGHT ─────────────────────────────────────────
+  {
+    typeId: "arcane_knight", name: "Arcane Knight", faction: "Arcane", tier: 1,
+    description: "Leaps in an L-shape, ignoring pieces in between.",
+    symbol: "♞",
     movement: {
       directions: [
-        [-2,-2,1],[-2,0,1],[-2,2,1],
-        [-1,-1,1],[-1,0,1],[-1,1,1],
-        [ 0,-2,1],          [ 0,2,1],
-        [ 1,-1,1],[ 1,0,1],[ 1,1,1],
-        [ 2,-2,1],[ 2,0,1],[ 2,2,1],
+        [-2,-1,1],[-2,1,1],[-1,-2,1],[-1,2,1],
+        [ 1,-2,1],[ 1,2,1],[ 2,-1,1],[ 2,1,1],
       ],
       canLeap: true,
     },
     abilities: [
       {
-        id: "shadow_step", name: "Shadow Step",
-        description: "Teleport to any empty tile within 4 squares.",
-        cooldown: 3, range: 4,
+        id: "flanking_strike", name: "Flanking Strike",
+        description: "After capturing a piece, immediately move again this same turn.",
+        cooldown: 0, range: 0,
       },
     ],
   },
 
-  // 10. STONE SENTINEL ───────────────────────────────────────
+  // 6. IRON PAWN ─────────────────────────────────────────────
   {
-    typeId: "stone_sentinel", name: "Stone Sentinel", faction: "Iron", tier: 2,
-    description: "Cannot move. Nearly impenetrable wall. Taunts adjacent enemies.", symbol: "⬡",
-    movement: { directions: [], canLeap: false },
+    typeId: "iron_pawn", name: "Iron Pawn", faction: "Iron", tier: 1,
+    description: "Marches forward one tile, captures diagonally.",
+    symbol: "♟",
+    movement: {
+      // Forward direction is flipped per owner in the engine via pawnDir()
+      // (white moves toward row 0, black moves toward row 15).
+      // Diagonal captures (left/right, one step forward) are handled
+      // separately in calcAttacks — same as standard chess pawn capture.
+      directions: [[-1,0,1]],
+      canLeap: false,
+    },
     abilities: [
       {
-        id: "taunt", name: "Taunt",
-        description: "Enemy pieces adjacent to this sentinel cannot move away for 1 turn.",
-        cooldown: 4, range: 1,
+        id: "soul_mimic", name: "Soul Mimic",
+        description: "After capturing a non-King piece, transform into that piece for 1 turn, then revert to an Iron Pawn.",
+        cooldown: 0, range: 0,
       },
     ],
   },

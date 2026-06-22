@@ -30,7 +30,7 @@ const STYLES = `
 
 // ─── Constants ────────────────────────────────────────────────
 const FACTION_COLOR: Record<string, string> = {
-  Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0", Fire: "#e05c2a",
+  Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0",
 };
 const FACTION_BG: Record<string, string> = {
   Arcane: "rgba(201,168,76,0.08)", Void: "rgba(155,109,224,0.08)",
@@ -82,7 +82,11 @@ function PieceCard({
       {/* Symbol */}
       <div
         className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
-        style={{ background: FACTION_BG[def.faction] ?? "rgba(201,168,76,0.08)", border: `1px solid ${fc}30` }}
+        style={{
+          background: FACTION_BG[def.faction] ?? "rgba(201,168,76,0.08)",
+          border: `1px solid ${fc}30`,
+          color: "#1e2535",
+        }}
       >
         {def.symbol}
       </div>
@@ -238,7 +242,7 @@ function BoardPreview({
                     boxShadow: `0 0 0 1px ${fc}50`,
                   }}
                 >
-                  <span style={{ lineHeight: 1, display: "block", marginTop: 1 }}>{def.symbol}</span>
+                  <span style={{ lineHeight: 1, display: "block", marginTop: 1, color: "#1e2535" }}>{def.symbol}</span>
                   {/* Remove btn */}
                   <button
                     onClick={e => { e.stopPropagation(); onTileClick(coord); }}
@@ -738,6 +742,7 @@ export default function DecksPage() {
                     style={{
                       background: FACTION_BG[selectedDef.faction] ?? "rgba(201,168,76,0.08)",
                       border: `1.5px solid ${FACTION_COLOR[selectedDef.faction] ?? "#c9a84c"}40`,
+                      color: "#1e2535",
                     }}
                   >
                     {selectedDef.symbol}
