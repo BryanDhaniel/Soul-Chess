@@ -109,18 +109,22 @@ export function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[]
   const flip  = defId === "iron_pawn" ? pawnDir(piece.owner) : 1;
   const valid: Coord[] = [];
 
-  for (const [dr, dc, maxSteps] of def.movement.directions) {
-    const steps = maxSteps === 0 ? GRID_SIZE : maxSteps;
-    for (let s = 1; s <= steps; s++) {
-      const r = piece.position.row + dr * flip * s;
-      const c = piece.position.col + dc * s;
-      if (!isInBounds(r, c) || !isInsideOctagon(r, c)) break;
-      const target = pieceMap.get(coordKey({ row: r, col: c }));
-      if (target) {
-        if (target.owner !== piece.owner && isAttackable(piece, target)) {
-          valid.push({ row: r, col: c });
+  // PERBAIKAN 1: Bidak Pawn jangan diproses di loop serangan standar
+  // agar tidak bisa menyerang lurus ke depan
+  if (defId !== "iron_pawn") {
+    for (const [dr, dc, maxSteps] of def.movement.directions) {
+      const steps = maxSteps === 0 ? GRID_SIZE : maxSteps;
+      for (let s = 1; s <= steps; s++) {
+        const r = piece.position.row + dr * flip * s;
+        const c = piece.position.col + dc * s;
+        if (!isInBounds(r, c) || !isInsideOctagon(r, c)) break;
+        const target = pieceMap.get(coordKey({ row: r, col: c }));
+        if (target) {
+          if (target.owner !== piece.owner && isAttackable(piece, target)) {
+            valid.push({ row: r, col: c });
+          }
+          if (!def.movement.canLeap) break;
         }
-        if (!def.movement.canLeap) break;
       }
     }
   }
@@ -129,7 +133,10 @@ export function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[]
   if (defId === "iron_pawn") {
     const dir = pawnDir(piece.owner);
     for (const dc of [-1, 1]) {
-      const r = piece.position.row + dir;
+      // PERBAIKAN 2: Kalikan dir dengan -1. 
+      // Putih (dir=1) akan menjadi -1 (maju ke atas). 
+      // Hitam (dir=-1) akan menjadi 1 (maju ke bawah).
+      const r = piece.position.row + (-1 * dir); 
       const c = piece.position.col + dc;
       if (!isInBounds(r, c) || !isInsideOctagon(r, c)) continue;
       const t = pieceMap.get(coordKey({ row: r, col: c }));
@@ -138,6 +145,7 @@ export function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[]
       }
     }
   }
+  
   return valid;
 }
 
