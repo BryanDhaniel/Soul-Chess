@@ -129,14 +129,12 @@ export function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[]
     }
   }
 
-  // Pawn (or mimicked pawn): diagonal forward attacks only
-  if (defId === "iron_pawn") {
-    const dir = pawnDir(piece.owner);
+  // Pawn (or mimicked pawn): diagonal attacks in ALL 4 directions
+// (forward-left, forward-right, backward-left, backward-right)
+if (defId === "iron_pawn") {
+  for (const dr of [-1, 1]) {
     for (const dc of [-1, 1]) {
-      // PERBAIKAN 2: Kalikan dir dengan -1. 
-      // Putih (dir=1) akan menjadi -1 (maju ke atas). 
-      // Hitam (dir=-1) akan menjadi 1 (maju ke bawah).
-      const r = piece.position.row + (-1 * dir); 
+      const r = piece.position.row + dr;
       const c = piece.position.col + dc;
       if (!isInBounds(r, c) || !isInsideOctagon(r, c)) continue;
       const t = pieceMap.get(coordKey({ row: r, col: c }));
@@ -145,6 +143,7 @@ export function calcAttacks(piece: Piece, pieceMap: Map<string, Piece>): Coord[]
       }
     }
   }
+}
   
   return valid;
 }

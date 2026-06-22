@@ -61,16 +61,18 @@ function getPieceAttacks(piece: Piece, pieceMap: Map<string, Piece>): Piece[] {
   }
 
   // Pawn diagonal attacks
-  if (piece.definitionId === "iron_pawn") {
-    const dir = pawnDir(piece.owner);
+  // Pawn diagonal attacks — all 4 directions (matches gameEngine.ts)
+if (piece.definitionId === "iron_pawn") {
+  for (const dr of [-1, 1]) {
     for (const dc of [-1, 1]) {
-      const r = piece.position.row + dir;
+      const r = piece.position.row + dr;
       const c = piece.position.col + dc;
       if (!isInBounds(r, c) || !isInsideOctagon(r, c)) continue;
       const t = pieceMap.get(coordKey({ row: r, col: c }));
       if (t && t.owner !== piece.owner) targets.push(t);
     }
   }
+}
 
   return targets;
 }

@@ -112,14 +112,12 @@ const DEFINITIONS: PieceDefinition[] = [
   // 6. IRON PAWN ─────────────────────────────────────────────
   {
     typeId: "iron_pawn", name: "Iron Pawn", faction: "Iron", tier: 1,
-    description: "Marches forward one tile, captures diagonally.",
+    description: "Marches forward or backward one tile (straight only), captures diagonally in any direction.",
     symbol: "♟",
     movement: {
-      // Forward direction is flipped per owner in the engine via pawnDir()
-      // (white moves toward row 0, black moves toward row 15).
-      // Diagonal captures (left/right, one step forward) are handled
-      // separately in calcAttacks — same as standard chess pawn capture.
-      directions: [[-1,0,1]],
+      // Forward AND backward, one step, straight only.
+      // (Direction is symmetric so owner-flip in the engine doesn't matter here.)
+      directions: [[-1,0,1],[1,0,1]],
       canLeap: false,
     },
     abilities: [

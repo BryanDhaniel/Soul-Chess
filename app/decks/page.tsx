@@ -619,13 +619,22 @@ export default function DecksPage() {
               </div>
             </div>
 
-            {/* Validation errors */}
-            {deckErrors.length > 0 && (
-              <div className="flex flex-col gap-1 shrink-0">
+            {/* Board & Floating Validation Errors Container */}
+            <div className="flex-1 relative flex items-center justify-center min-h-0">
+              
+              {/* Validation errors — Absolute Position (Melayang di atas board) */}
+              <div
+                className="absolute top-0 left-0 right-0 z-20 flex flex-col gap-1"
+                style={{
+                  opacity: deckErrors.length > 0 ? 1 : 0,
+                  pointerEvents: deckErrors.length > 0 ? "auto" : "none",
+                  transition: "opacity 0.15s ease",
+                }}
+              >
                 {deckErrors.map(err => (
                   <div
                     key={err}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px]"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] shrink-0"
                     style={{
                       background: "rgba(248,113,113,0.08)",
                       border: "1px solid rgba(248,113,113,0.22)",
@@ -637,10 +646,8 @@ export default function DecksPage() {
                   </div>
                 ))}
               </div>
-            )}
 
-            {/* Board */}
-            <div className="flex-1 flex items-center justify-center min-h-0">
+              {/* Board */}
               <div className="w-full max-w-[min(100%,calc(100vh-200px))]">
                 {editingDeck ? (
                   <BoardPreview
