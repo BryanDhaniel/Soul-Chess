@@ -6,7 +6,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Crown, ChevronLeft, Swords, Shield, Heart, Zap,
-  X, Bot, User, Info, Layers, Play,
+  X, Bot, User, Info, Layers, Play, AlertTriangle,
 } from "lucide-react";
 import type { Piece, DeckConfig, Player } from "../../types/game";
 import { useGameState } from "../../hooks/useGameState";
@@ -15,6 +15,7 @@ import { coordKey } from "../../lib/boardUtils";
 import { getPieceDefinitionById } from "../../lib/pieceRegistry";
 import {
   loadDecks, loadActiveDeckId, makeDefaultDeck, makeRandomDeck,
+  isDeckValid, getDeckErrors,
 } from "../../lib/deckStorage";
 import type { AIDifficulty } from "../../lib/ai";
 import { sfx, getMuted, setMuted } from "../../lib/sounds";
@@ -34,6 +35,7 @@ const STYLES = `
   @keyframes spin      { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   @keyframes pulseDot  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.55;transform:scale(0.8)} }
   @keyframes avatarIn  { from{opacity:0;transform:translateX(-12px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes warnIn    { from{opacity:0;transform:scale(0.92) translateY(-10px)} to{opacity:1;transform:scale(1) translateY(0)} }
 `;
 
 // ─── Player config ────────────────────────────────────────────
@@ -565,6 +567,101 @@ function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
   );
 }
 
+// ─── Deck Invalid Warning ──────────────────────────────────────
+// Shown instead of ModeSelect when the player's active deck doesn't
+// satisfy deck rules (must be exactly 20 pieces, with exactly 1 Soul
+// King + 1 Soulbound Queen). Blocks entry into a match entirely.
+function DeckInvalidWarning({
+  errors, onGoToDecks, onBack,
+}: {
+  errors: string[];
+  onGoToDecks: () => void;
+  onBack: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 30); return () => clearTimeout(t); }, []);
+
+  return (
+    <>
+      <style>{STYLES}</style>
+      <div
+        className="min-h-screen w-full flex flex-col items-center justify-center gap-8 p-8"
+        style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 50%,#ece4d3 100%)" }}
+      >
+        <div
+          className="pointer-events-none fixed inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: "repeating-conic-gradient(#2c2c2c 0deg 90deg,transparent 90deg 180deg)",
+            backgroundSize: "56px 56px",
+          }}
+        />
+        <div
+          className="flex flex-col items-center gap-5 relative z-10 max-w-sm w-full"
+          style={{
+            background: "rgba(253,251,247,0.92)",
+            border: "1.5px solid rgba(248,113,113,0.45)",
+            borderRadius: 18,
+            padding: "32px 28px",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+            animation: mounted ? "warnIn 0.4s cubic-bezier(0.22,1,0.36,1) both" : "none",
+          }}
+        >
+          <div
+            className="w-16 h-16 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(248,113,113,0.12)", border: "2px solid rgba(248,113,113,0.4)" }}
+          >
+            <AlertTriangle className="size-7" style={{ color: "#f87171" }} />
+          </div>
+
+          <div className="text-center flex flex-col gap-1.5 w-full">
+            <p className="text-[10px] uppercase tracking-[0.4em] text-[#8b7d6b]">Invalid Deck</p>
+            <h2 className="font-serif font-bold text-xl text-[#1e3a6e]">Not Yet Ready to Compete</h2>
+            <OrnDivider />
+            <p className="text-[11px] text-[#8b7d6b] mt-1">
+              Your main deck does not meet the requirements for play:
+            </p>
+          </div>
+
+          {/* Error list */}
+          <div className="flex flex-col gap-1.5 w-full">
+            {errors.map(err => (
+              <div
+                key={err}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+                style={{
+                  background: "rgba(248,113,113,0.08)",
+                  border: "1px solid rgba(248,113,113,0.22)",
+                  color: "#f87171",
+                }}
+              >
+                <AlertTriangle className="size-3 shrink-0" />
+                {err}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2.5 w-full">
+            <button
+              onClick={onGoToDecks}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] cursor-pointer hover:opacity-90 transition-opacity"
+              style={{ background: "linear-gradient(135deg,#c9a84c,#b8860b)" }}
+            >
+              <Layers className="size-3.5" /> Edit Deck
+            </button>
+            <button
+              onClick={onBack}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider cursor-pointer"
+              style={{ border: "1px solid rgba(201,168,76,0.35)", color: "#8b7d6b", background: "transparent" }}
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Battle View ──────────────────────────────────────────────
 function BattleView({
   whiteDeck, blackDeck, mode, onRematch,
@@ -961,6 +1058,7 @@ function useDecks() {
 
 // ─── Page entry ───────────────────────────────────────────────
 export default function PlayLocalPage() {
+  const router             = useRouter();
   const playerDeck        = useDecks();
   const [mode, setMode]   = useState<GameMode | null>(null);
   const [aiDeck, setAiDeck] = useState<DeckConfig | null>(null);
@@ -971,6 +1069,21 @@ export default function PlayLocalPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f5f0e8" }}>
         <span className="font-serif text-[#8b7d6b] animate-pulse">Loading…</span>
       </div>
+    );
+  }
+
+  // ── Guard: block entry entirely if the active deck breaks the rules ──
+  // (must be exactly 20 pieces, with exactly 1 Soul King + 1 Soulbound Queen).
+  // Without this check, a player could reach /play/local directly from the
+  // main menu with an invalid deck and start a match anyway, bypassing the
+  // "Play" button guard on the Deck Builder page.
+  if (!isDeckValid(playerDeck.slots)) {
+    return (
+      <DeckInvalidWarning
+        errors={getDeckErrors(playerDeck.slots)}
+        onGoToDecks={() => router.push("/decks")}
+        onBack={() => router.push("/")}
+      />
     );
   }
 
