@@ -521,24 +521,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...next, winner, phase: winner ? "ended" : next.phase };
     }
 
-    // ── Watchdog recovery: AI got stuck, forcibly pass its turn ──
-    case "FORCE_SKIP_TURN": {
-      // Only act if we're still on the exact same player+turn the
-      // watchdog was armed for — otherwise the game already moved on
-      // normally and this is a stale timer firing late.
-      if (state.currentPlayer !== action.player || state.turnNumber !== action.turn) {
-        return state;
-      }
-      if (state.phase !== "battle") return state;
-
-      const cleared: GameState = {
-        ...state,
-        selectedPieceId: null,
-        validMoves: [], validAttacks: [], validAbilityTargets: [], activeAbilityId: null,
-      };
-      return switchPlayer(cleared);
-    }
-
     default:
       return state;
   }

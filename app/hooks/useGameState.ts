@@ -71,9 +71,6 @@ export function useGameState({
     const ai = aiRef.current[state.currentPlayer];
     if (!ai) return;
 
-    const turnSnapshot = state.turnNumber;
-    const playerSnapshot = state.currentPlayer;
-
     const timer = setTimeout(() => {
       const move = ai.chooseMove(state, state.currentPlayer);
 
@@ -98,17 +95,8 @@ export function useGameState({
       }, 50);
     }, aiDelay);
 
-    // Safety watchdog: if after (aiDelay + 2000ms) it's STILL this AI's turn
-    // with the same turn number, something went wrong (e.g. AI proposed an
-    // illegal move that the reducer silently rejected). Force-skip this
-    // piece's turn entirely so the game doesn't hang forever.
-    const watchdog = setTimeout(() => {
-      dispatch({ type: "FORCE_SKIP_TURN", player: playerSnapshot, turn: turnSnapshot });
-    }, aiDelay + 2000);
-
     return () => {
       clearTimeout(timer);
-      clearTimeout(watchdog);
     };
   }, [state.currentPlayer, state.phase, state.winner, state.turnNumber, state.selectedPieceId, aiDelay]);
 

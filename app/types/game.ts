@@ -135,5 +135,4 @@ export type GameAction =
   | { type: "ATTACK_PIECE";     targetId: string }
   | { type: "ACTIVATE_ABILITY"; abilityId: string }
   | { type: "USE_ABILITY";      target: Coord }
-  | { type: "DESELECT" }
-  | { type: "FORCE_SKIP_TURN";  player: Player; turn: number };
+  | { type: "DESELECT" };

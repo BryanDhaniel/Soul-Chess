@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   Crown, ChevronLeft, Swords, Shield, Heart, Zap,
   X, Bot, User, Info, Layers, Play, AlertTriangle,
+  Cpu, ChevronRight,
 } from "lucide-react";
 import type { Piece, DeckConfig, Player } from "../../types/game";
 import { useGameState } from "../../hooks/useGameState";
@@ -47,6 +48,10 @@ const PLAYER_CFG: Record<Player, { label: string; color: string }> = {
 const FACTION_COLOR: Record<string, string> = {
   Arcane: "#c9a84c", Void: "#9b6de0", Iron: "#7a8fa0",
 };
+
+// ─── App flow steps ───────────────────────────────────────────
+type GameMode = "ai-black" | "ai-white" | "pvp";
+type AppStep  = "mode" | "difficulty" | "deck-p1" | "deck-p2" | "battle";
 
 // ─── Ornate divider ───────────────────────────────────────────
 function OrnDivider() {
@@ -185,8 +190,6 @@ function MoveHistoryMini({
 }
 
 // ─── Player Avatar Card ───────────────────────────────────────
-type GameMode = "ai-black" | "ai-white" | "pvp";
-
 function PlayerCard({
   player, isAI, isActive, piecesLeft,
 }: {
@@ -468,7 +471,7 @@ function WinOverlay({ winner, isDraw = false, reason = "captured", onRematch, on
           </h2>
           <OrnDivider />
           <p className="text-[10px] text-[#8b7d6b] italic font-serif mt-1">
-            "The board is a battlefield of souls."
+            &quot;The board is a battlefield of souls.&quot;
           </p>
         </div>
         <div className="flex gap-2.5 w-full">
@@ -492,6 +495,28 @@ function WinOverlay({ winner, isDraw = false, reason = "captured", onRematch, on
   );
 }
 
+// ─── Shared page chrome ───────────────────────────────────────
+function PageChrome({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <style>{STYLES}</style>
+      <div
+        className="min-h-screen w-full flex flex-col items-center justify-center gap-8 p-8 overflow-x-hidden"
+        style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 50%,#ece4d3 100%)" }}
+      >
+        <div
+          className="pointer-events-none fixed inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: "repeating-conic-gradient(#2c2c2c 0deg 90deg,transparent 90deg 180deg)",
+            backgroundSize: "56px 56px",
+          }}
+        />
+        {children}
+      </div>
+    </>
+  );
+}
+
 // ─── Mode Select ──────────────────────────────────────────────
 function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
   const [mounted, setMounted] = useState(false);
@@ -504,66 +529,336 @@ function ModeSelect({ onSelect }: { onSelect: (m: GameMode) => void }) {
   ];
 
   return (
-    <>
-      <style>{STYLES}</style>
+    <PageChrome>
       <div
-        className="min-h-screen w-full flex flex-col items-center justify-center gap-10 p-8"
-        style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 50%,#ece4d3 100%)" }}
+        className="flex flex-col items-center gap-3 relative z-10"
+        style={{ animation: mounted ? "slideDown 0.45s ease both 0.05s" : "none" }}
       >
         <div
-          className="pointer-events-none fixed inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage: "repeating-conic-gradient(#2c2c2c 0deg 90deg,transparent 90deg 180deg)",
-            backgroundSize: "56px 56px",
-          }}
-        />
-        <div
-          className="flex flex-col items-center gap-3 relative z-10"
-          style={{ animation: mounted ? "slideDown 0.45s ease both 0.05s" : "none" }}
+          className="w-16 h-16 rounded-full flex items-center justify-center border"
+          style={{ background: "linear-gradient(135deg,#fdfbf7,#ece4d3)", borderColor: "#c9a84c60", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
         >
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center border"
-            style={{ background: "linear-gradient(135deg,#fdfbf7,#ece4d3)", borderColor: "#c9a84c60", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
-          >
-            <Crown className="size-7 text-[#b8860b]" />
-          </div>
-          <div className="text-center">
-            <h1 className="font-serif font-bold text-3xl text-[#1e3a6e] tracking-widest uppercase">SoulChess</h1>
-            <p className="text-[10px] uppercase tracking-[0.45em] text-[#8b7d6b] mt-1">Choose your battle</p>
-          </div>
+          <Crown className="size-7 text-[#b8860b]" />
         </div>
-        <div
-          className="flex flex-col gap-3 w-full max-w-xs relative z-10"
-          style={{ animation: mounted ? "slideUp 0.45s ease both 0.1s" : "none" }}
-        >
-          {modes.map(({ mode, title, sub, color, delay }) => (
-            <button
-              key={mode}
-              onClick={() => onSelect(mode)}
-              className="flex items-center gap-4 px-5 py-4 cursor-pointer transition-all hover:scale-[1.02] text-left"
-              style={{
-                background: "rgba(253,251,247,0.8)",
-                border: `1px solid ${color}40`,
-                borderRadius: 14,
-                boxShadow: `0 2px 16px ${color}10`,
-                animation: mounted ? `modeIn 0.4s ease both ${delay}` : "none",
-              }}
-            >
-              <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: `${color}20`, border: `1px solid ${color}40` }}
-              >
-                <User className="size-5" style={{ color }} />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-serif font-bold text-sm text-[#1e3a6e]">{title}</span>
-                <span className="text-[10px] text-[#8b7d6b] mt-0.5 uppercase tracking-wider">{sub}</span>
-              </div>
-            </button>
-          ))}
+        <div className="text-center">
+          <h1 className="font-serif font-bold text-3xl text-[#1e3a6e] tracking-widest uppercase">SoulChess</h1>
+          <p className="text-[10px] uppercase tracking-[0.45em] text-[#8b7d6b] mt-1">Choose your battle</p>
         </div>
       </div>
-    </>
+      <div
+        className="flex flex-col gap-3 w-full max-w-xs relative z-10"
+        style={{ animation: mounted ? "slideUp 0.45s ease both 0.1s" : "none" }}
+      >
+        {modes.map(({ mode, title, sub, color, delay }) => (
+          <button
+            key={mode}
+            onClick={() => onSelect(mode)}
+            className="flex items-center gap-4 px-5 py-4 cursor-pointer transition-all hover:scale-[1.02] text-left"
+            style={{
+              background: "rgba(253,251,247,0.8)",
+              border: `1px solid ${color}40`,
+              borderRadius: 14,
+              boxShadow: `0 2px 16px ${color}10`,
+              animation: mounted ? `modeIn 0.4s ease both ${delay}` : "none",
+            }}
+          >
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: `${color}20`, border: `1px solid ${color}40` }}
+            >
+              <User className="size-5" style={{ color }} />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif font-bold text-sm text-[#1e3a6e]">{title}</span>
+              <span className="text-[10px] text-[#8b7d6b] mt-0.5 uppercase tracking-wider">{sub}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </PageChrome>
+  );
+}
+
+// ─── Difficulty Select ────────────────────────────────────────
+const DIFFICULTY_CFG: {
+  id: AIDifficulty;
+  label: string;
+  tag: string;
+  desc: string;
+  color: string;
+  icon: string;
+  delay: string;
+}[] = [
+  {
+    id: "random", label: "Easy", tag: "Carefree",
+    desc: "The AI makes random moves. Good for learning.",
+    color: "#4ade80", icon: "🌿", delay: "0.12s",
+  },
+  {
+    id: "greedy", label: "Normal", tag: "Cunning",
+    desc: "The AI prioritises captures and advances aggressively.",
+    color: "#c9a84c", icon: "⚔️", delay: "0.20s",
+  },
+  {
+    id: "minimax", label: "Hard", tag: "Relentless",
+    desc: "The AI looks two moves ahead to find the best play.",
+    color: "#f87171", icon: "🔮", delay: "0.28s",
+  },
+];
+
+function DifficultySelect({
+  mode,
+  onSelect,
+  onBack,
+}: {
+  mode: GameMode;
+  onSelect: (d: AIDifficulty) => void;
+  onBack: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 30); return () => clearTimeout(t); }, []);
+
+  const sideLabel = mode === "ai-black" ? "You play White" : "You play Black";
+  const sideColor = mode === "ai-black" ? "#c9a84c" : "#9b6de0";
+
+  return (
+    <PageChrome>
+      <div
+        className="flex flex-col items-center gap-2 relative z-10"
+        style={{ animation: mounted ? "slideDown 0.4s ease both 0.05s" : "none" }}
+      >
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center border"
+          style={{ background: "linear-gradient(135deg,#fdfbf7,#ece4d3)", borderColor: `${sideColor}60`, boxShadow: `0 4px 20px ${sideColor}20` }}
+        >
+          <Cpu className="size-6" style={{ color: sideColor }} />
+        </div>
+        <div className="text-center">
+          <h1 className="font-serif font-bold text-2xl text-[#1e3a6e] tracking-widest uppercase">Choose Difficulty</h1>
+          <p className="text-[10px] uppercase tracking-[0.35em] mt-1" style={{ color: sideColor }}>{sideLabel}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 w-full max-w-xs relative z-10">
+        {DIFFICULTY_CFG.map(({ id, label, tag, desc, color, icon, delay }) => (
+          <button
+            key={id}
+            onClick={() => onSelect(id)}
+            className="flex items-center gap-4 px-5 py-4 cursor-pointer transition-all hover:scale-[1.02] text-left group"
+            style={{
+              background: "rgba(253,251,247,0.88)",
+              border: `1px solid ${color}40`,
+              borderRadius: 14,
+              boxShadow: `0 2px 16px ${color}08`,
+              animation: mounted ? `modeIn 0.4s ease both ${delay}` : "none",
+            }}
+          >
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-xl"
+              style={{ background: `${color}18`, border: `1px solid ${color}40` }}
+            >
+              {icon}
+            </div>
+            <div className="flex flex-col flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-serif font-bold text-sm text-[#1e3a6e]">{label}</span>
+                <span
+                  className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                  style={{ background: `${color}18`, color, border: `1px solid ${color}40` }}
+                >
+                  {tag}
+                </span>
+              </div>
+              <span className="text-[10px] text-[#8b7d6b] mt-0.5 leading-snug">{desc}</span>
+            </div>
+            <ChevronRight className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5" style={{ color: color }} />
+          </button>
+        ))}
+
+        <button
+          onClick={onBack}
+          className="text-[10px] uppercase tracking-wider text-[#8b7d6b] cursor-pointer hover:text-[#1e3a6e] transition-colors mt-1"
+        >
+          ← Back
+        </button>
+      </div>
+    </PageChrome>
+  );
+}
+
+// ─── Deck Picker (PvP) ────────────────────────────────────────
+function DeckPickerPvP({
+  allDecks,
+  step,          // "deck-p1" | "deck-p2"
+  onConfirm,
+  onBack,
+}: {
+  allDecks: DeckConfig[];
+  step: "deck-p1" | "deck-p2";
+  onConfirm: (deck: DeckConfig) => void;
+  onBack: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 30); return () => clearTimeout(t); }, []);
+
+  const isP1       = step === "deck-p1";
+  const playerNum  = isP1 ? 1 : 2;
+  const playerColor = isP1 ? "#c9a84c" : "#9b6de0";
+  const playerLabel = isP1 ? "Player 1 — White" : "Player 2 — Black";
+
+  const [selectedId, setSelectedId] = useState<string | null>(
+    allDecks.find(d => isDeckValid(d.slots))?.id ?? null
+  );
+
+  const selectedDeck = allDecks.find(d => d.id === selectedId) ?? null;
+  const isValid      = selectedDeck !== null && isDeckValid(selectedDeck.slots);
+  const errors       = selectedDeck ? getDeckErrors(selectedDeck.slots) : [];
+
+  return (
+    <PageChrome>
+      {/* Header */}
+      <div
+        className="flex flex-col items-center gap-2 relative z-10"
+        style={{ animation: mounted ? "slideDown 0.4s ease both 0.05s" : "none" }}
+      >
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center border"
+          style={{
+            background: "linear-gradient(135deg,#fdfbf7,#ece4d3)",
+            borderColor: `${playerColor}60`,
+            boxShadow: `0 4px 20px ${playerColor}20`,
+          }}
+        >
+          <Layers className="size-6" style={{ color: playerColor }} />
+        </div>
+        <div className="text-center">
+          <h1 className="font-serif font-bold text-2xl text-[#1e3a6e] tracking-widest uppercase">Choose Deck</h1>
+          <p className="text-[10px] uppercase tracking-[0.35em] mt-1" style={{ color: playerColor }}>
+            {playerLabel}
+          </p>
+        </div>
+      </div>
+
+      {/* Deck list */}
+      <div
+        className="flex flex-col gap-2 w-full max-w-xs relative z-10 overflow-y-auto overflow-x-hidden"
+        style={{
+          maxHeight: "40vh",
+          animation: mounted ? "slideUp 0.4s ease both 0.1s" : "none",
+        }}
+      >
+        {allDecks.length === 0 ? (
+          <div
+            className="flex flex-col items-center gap-2 p-6 rounded-xl text-center"
+            style={{ background: "rgba(253,251,247,0.8)", border: "1px solid rgba(201,168,76,0.25)" }}
+          >
+            <span style={{ fontSize: 28 }}>📭</span>
+            <p className="font-serif text-sm text-[#1e3a6e]">No decks found</p>
+            <p className="text-[10px] text-[#8b7d6b]">Build a deck first in the Decks page.</p>
+          </div>
+        ) : (
+          allDecks.map((deck, i) => {
+            const valid   = isDeckValid(deck.slots);
+            const isSelected = deck.id === selectedId;
+            const borderCol  = isSelected ? playerColor : valid ? "rgba(201,168,76,0.3)" : "rgba(248,113,113,0.3)";
+
+            return (
+              <button
+                key={deck.id}
+                onClick={() => setSelectedId(deck.id)}
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer text-left transition-all hover:scale-[1.01]"
+                style={{
+                  background: isSelected ? `${playerColor}12` : "rgba(253,251,247,0.85)",
+                  border: `1.5px solid ${borderCol}`,
+                  borderRadius: 12,
+                  boxShadow: isSelected ? `0 0 0 2px ${playerColor}20` : "none",
+                  animation: mounted ? `modeIn 0.35s ease both ${i * 0.07}s` : "none",
+                }}
+              >
+                {/* Selection indicator */}
+                <div
+                  className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
+                  style={{
+                    border: `2px solid ${isSelected ? playerColor : "rgba(201,168,76,0.4)"}`,
+                    background: isSelected ? playerColor : "transparent",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {isSelected && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fdfbf7" }} />}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-serif font-bold text-sm text-[#1e3a6e] truncate">{deck.name}</p>
+                  <p className="text-[9px] text-[#8b7d6b] mt-0.5">
+                    {deck.slots.length} pieces
+                  </p>
+                </div>
+
+                {/* Valid badge */}
+                {valid ? (
+                  <span
+                    className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0"
+                    style={{ background: "rgba(74,222,128,0.15)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.35)" }}
+                  >
+                    Ready
+                  </span>
+                ) : (
+                  <span
+                    className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0"
+                    style={{ background: "rgba(248,113,113,0.12)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)" }}
+                  >
+                    Invalid
+                  </span>
+                )}
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      {/* Errors for selected invalid deck */}
+      {!isValid && selectedDeck && errors.length > 0 && (
+        <div className="flex flex-col gap-1.5 w-full max-w-xs relative z-10">
+          {errors.map(err => (
+            <div
+              key={err}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px]"
+              style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.22)", color: "#f87171" }}
+            >
+              <AlertTriangle className="size-3 shrink-0" />
+              {err}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-2.5 w-full max-w-xs relative z-10">
+        <button
+          onClick={() => { if (isValid && selectedDeck) onConfirm(selectedDeck); }}
+          disabled={!isValid}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] transition-opacity cursor-pointer"
+          style={{
+            background: isValid
+              ? `linear-gradient(135deg,${playerColor},${playerColor}cc)`
+              : "rgba(0,0,0,0.1)",
+            color: isValid ? "#fdfbf7" : "#8b7d6b",
+            cursor: isValid ? "pointer" : "not-allowed",
+            opacity: isValid ? 1 : 0.6,
+          }}
+        >
+          {isP1 ? "Next: Player 2" : "Start Battle"}
+          {isP1 ? <ChevronRight className="size-3" /> : <Swords className="size-3" />}
+        </button>
+        <button
+          onClick={onBack}
+          className="px-4 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider cursor-pointer"
+          style={{ border: "1px solid rgba(201,168,76,0.35)", color: "#8b7d6b", background: "transparent" }}
+        >
+          Back
+        </button>
+      </div>
+    </PageChrome>
   );
 }
 
@@ -582,92 +877,79 @@ function DeckInvalidWarning({
   useEffect(() => { const t = setTimeout(() => setMounted(true), 30); return () => clearTimeout(t); }, []);
 
   return (
-    <>
-      <style>{STYLES}</style>
+    <PageChrome>
       <div
-        className="min-h-screen w-full flex flex-col items-center justify-center gap-8 p-8"
-        style={{ background: "radial-gradient(ellipse at top,#fff4c2 0%,#f5f0e8 50%,#ece4d3 100%)" }}
+        className="flex flex-col items-center gap-5 relative z-10 max-w-sm w-full"
+        style={{
+          background: "rgba(253,251,247,0.92)",
+          border: "1.5px solid rgba(248,113,113,0.45)",
+          borderRadius: 18,
+          padding: "32px 28px",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+          animation: mounted ? "warnIn 0.4s cubic-bezier(0.22,1,0.36,1) both" : "none",
+        }}
       >
         <div
-          className="pointer-events-none fixed inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage: "repeating-conic-gradient(#2c2c2c 0deg 90deg,transparent 90deg 180deg)",
-            backgroundSize: "56px 56px",
-          }}
-        />
-        <div
-          className="flex flex-col items-center gap-5 relative z-10 max-w-sm w-full"
-          style={{
-            background: "rgba(253,251,247,0.92)",
-            border: "1.5px solid rgba(248,113,113,0.45)",
-            borderRadius: 18,
-            padding: "32px 28px",
-            boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
-            animation: mounted ? "warnIn 0.4s cubic-bezier(0.22,1,0.36,1) both" : "none",
-          }}
+          className="w-16 h-16 rounded-full flex items-center justify-center"
+          style={{ background: "rgba(248,113,113,0.12)", border: "2px solid rgba(248,113,113,0.4)" }}
         >
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(248,113,113,0.12)", border: "2px solid rgba(248,113,113,0.4)" }}
+          <AlertTriangle className="size-7" style={{ color: "#f87171" }} />
+        </div>
+
+        <div className="text-center flex flex-col gap-1.5 w-full">
+          <p className="text-[10px] uppercase tracking-[0.4em] text-[#8b7d6b]">Invalid Deck</p>
+          <h2 className="font-serif font-bold text-xl text-[#1e3a6e]">Not Yet Ready to Compete</h2>
+          <OrnDivider />
+          <p className="text-[11px] text-[#8b7d6b] mt-1">
+            Your main deck does not meet the requirements for play:
+          </p>
+        </div>
+
+        {/* Error list */}
+        <div className="flex flex-col gap-1.5 w-full">
+          {errors.map(err => (
+            <div
+              key={err}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+              style={{
+                background: "rgba(248,113,113,0.08)",
+                border: "1px solid rgba(248,113,113,0.22)",
+                color: "#f87171",
+              }}
+            >
+              <AlertTriangle className="size-3 shrink-0" />
+              {err}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2.5 w-full">
+          <button
+            onClick={onGoToDecks}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] cursor-pointer hover:opacity-90 transition-opacity"
+            style={{ background: "linear-gradient(135deg,#c9a84c,#b8860b)" }}
           >
-            <AlertTriangle className="size-7" style={{ color: "#f87171" }} />
-          </div>
-
-          <div className="text-center flex flex-col gap-1.5 w-full">
-            <p className="text-[10px] uppercase tracking-[0.4em] text-[#8b7d6b]">Invalid Deck</p>
-            <h2 className="font-serif font-bold text-xl text-[#1e3a6e]">Not Yet Ready to Compete</h2>
-            <OrnDivider />
-            <p className="text-[11px] text-[#8b7d6b] mt-1">
-              Your main deck does not meet the requirements for play:
-            </p>
-          </div>
-
-          {/* Error list */}
-          <div className="flex flex-col gap-1.5 w-full">
-            {errors.map(err => (
-              <div
-                key={err}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
-                style={{
-                  background: "rgba(248,113,113,0.08)",
-                  border: "1px solid rgba(248,113,113,0.22)",
-                  color: "#f87171",
-                }}
-              >
-                <AlertTriangle className="size-3 shrink-0" />
-                {err}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-2.5 w-full">
-            <button
-              onClick={onGoToDecks}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider text-[#fdfbf7] cursor-pointer hover:opacity-90 transition-opacity"
-              style={{ background: "linear-gradient(135deg,#c9a84c,#b8860b)" }}
-            >
-              <Layers className="size-3.5" /> Edit Deck
-            </button>
-            <button
-              onClick={onBack}
-              className="flex-1 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider cursor-pointer"
-              style={{ border: "1px solid rgba(201,168,76,0.35)", color: "#8b7d6b", background: "transparent" }}
-            >
-              Back
-            </button>
-          </div>
+            <Layers className="size-3.5" /> Edit Deck
+          </button>
+          <button
+            onClick={onBack}
+            className="flex-1 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider cursor-pointer"
+            style={{ border: "1px solid rgba(201,168,76,0.35)", color: "#8b7d6b", background: "transparent" }}
+          >
+            Back
+          </button>
         </div>
       </div>
-    </>
+    </PageChrome>
   );
 }
 
 // ─── Battle View ──────────────────────────────────────────────
 function BattleView({
-  whiteDeck, blackDeck, mode, onRematch,
+  whiteDeck, blackDeck, mode, aiDifficulty, onRematch,
 }: {
   whiteDeck: DeckConfig; blackDeck: DeckConfig;
-  mode: GameMode; onRematch: () => void;
+  mode: GameMode; aiDifficulty: AIDifficulty; onRematch: () => void;
 }) {
   const router = useRouter();
   const [mounted, setMounted]         = useState(false);
@@ -688,8 +970,8 @@ function BattleView({
 
   const humanPlayer: Player = mode === "ai-white" ? "black" : "white";
   const aiPlayers: Partial<Record<Player, AIDifficulty>> =
-    mode === "ai-black" ? { black: "random" } :
-    mode === "ai-white" ? { white: "random" } : {};
+    mode === "ai-black" ? { black: aiDifficulty } :
+    mode === "ai-white" ? { white: aiDifficulty } : {};
 
   const {
     state, selectPiece, deselect, movePiece, attackPiece,
@@ -783,6 +1065,9 @@ function BattleView({
   const whiteMissingKing = !state.kingIds.white;
   const blackMissingKing = !state.kingIds.black;
 
+  // Difficulty badge (AI modes only)
+  const difficultyLabel = DIFFICULTY_CFG.find(d => d.id === aiDifficulty);
+
   return (
     <>
       <style>{STYLES}</style>
@@ -851,9 +1136,20 @@ function BattleView({
                 {isCurrentAI ? `${cfg.label} (AI)` : cfg.label}
               </span>
             </div>
-            <span className="text-[9px] uppercase tracking-[0.3em] text-[#8b7d6b]">
-              Turn {turnNumber} · {isCurrentAI ? "thinking…" : "move or attack"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] uppercase tracking-[0.3em] text-[#8b7d6b]">
+                Turn {turnNumber} · {isCurrentAI ? "thinking…" : "move or attack"}
+              </span>
+              {/* Difficulty pill in AI mode */}
+              {mode !== "pvp" && difficultyLabel && (
+                <span
+                  className="text-[7px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                  style={{ background: `${difficultyLabel.color}18`, color: difficultyLabel.color, border: `1px solid ${difficultyLabel.color}40` }}
+                >
+                  {difficultyLabel.label}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -1044,27 +1340,35 @@ function BattleView({
   );
 }
 
-// ─── Deck loader ──────────────────────────────────────────────
-function useDecks() {
-  const [playerDeck, setPlayerDeck] = useState<DeckConfig | null>(null);
-  useEffect(() => {
-    const all = loadDecks();
-    const aid = loadActiveDeckId();
-    const fb  = makeDefaultDeck("Default");
-    setPlayerDeck(all.find(d => d.id === aid) ?? all[0] ?? fb);
-  }, []);
-  return playerDeck;
-}
-
 // ─── Page entry ───────────────────────────────────────────────
 export default function PlayLocalPage() {
-  const router             = useRouter();
-  const playerDeck        = useDecks();
-  const [mode, setMode]   = useState<GameMode | null>(null);
-  const [aiDeck, setAiDeck] = useState<DeckConfig | null>(null);
-  const [rematchKey, setRematchKey] = useState(0);
+  const router = useRouter();
 
-  if (!playerDeck) {
+  // All decks from localStorage
+  const [allDecks, setAllDecks] = useState<DeckConfig[] | null>(null);
+
+  useEffect(() => {
+    const decks = loadDecks();
+    const aid   = loadActiveDeckId();
+    // Sort: active deck first, then by name
+    const sorted = [...decks].sort((a, b) => {
+      if (a.id === aid) return -1;
+      if (b.id === aid) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    setAllDecks(sorted.length > 0 ? sorted : [makeDefaultDeck("Default")]);
+  }, []);
+
+  // Navigation state
+  const [step, setStep]                 = useState<AppStep>("mode");
+  const [mode, setMode]                 = useState<GameMode | null>(null);
+  const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>("random");
+  const [whiteDeck, setWhiteDeck]       = useState<DeckConfig | null>(null);
+  const [blackDeck, setBlackDeck]       = useState<DeckConfig | null>(null);
+  const [rematchKey, setRematchKey]     = useState(0);
+
+  // Loading screen
+  if (!allDecks) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f5f0e8" }}>
         <span className="font-serif text-[#8b7d6b] animate-pulse">Loading…</span>
@@ -1072,45 +1376,121 @@ export default function PlayLocalPage() {
     );
   }
 
-  // ── Guard: block entry entirely if the active deck breaks the rules ──
-  // (must be exactly 20 pieces, with exactly 1 Soul King + 1 Soulbound Queen).
-  // Without this check, a player could reach /play/local directly from the
-  // main menu with an invalid deck and start a match anyway, bypassing the
-  // "Play" button guard on the Deck Builder page.
-  if (!isDeckValid(playerDeck.slots)) {
-    return (
-      <DeckInvalidWarning
-        errors={getDeckErrors(playerDeck.slots)}
-        onGoToDecks={() => router.push("/decks")}
-        onBack={() => router.push("/")}
-      />
-    );
-  }
-
-  if (!mode || !aiDeck) {
+  // ── Mode select ──────────────────────────────────────────────
+  if (step === "mode") {
     return (
       <ModeSelect
         onSelect={selected => {
           setMode(selected);
-          setAiDeck(selected !== "pvp" ? makeRandomDeck("AI Deck") : playerDeck);
+          if (selected === "pvp") {
+            setStep("deck-p1");
+          } else {
+            setStep("difficulty");
+          }
         }}
       />
     );
   }
 
-  const whiteDeck = mode === "ai-white" ? aiDeck : playerDeck;
-  const blackDeck = mode === "ai-black" ? aiDeck : playerDeck;
+  // ── Difficulty select (AI modes only) ────────────────────────
+  if (step === "difficulty" && mode && mode !== "pvp") {
+    // Guard: validate the active deck before letting into AI battle
+    const activeDeckId = loadActiveDeckId();
+    const activeDeck   = allDecks.find(d => d.id === activeDeckId) ?? allDecks[0] ?? makeDefaultDeck("Default");
 
-  return (
-    <BattleView
-      key={rematchKey}
-      whiteDeck={whiteDeck}
-      blackDeck={blackDeck}
-      mode={mode}
-      onRematch={() => {
-        if (mode !== "pvp") setAiDeck(makeRandomDeck("AI Deck"));
-        setRematchKey(k => k + 1);
-      }}
-    />
-  );
+    if (!isDeckValid(activeDeck.slots)) {
+      return (
+        <DeckInvalidWarning
+          errors={getDeckErrors(activeDeck.slots)}
+          onGoToDecks={() => router.push("/decks")}
+          onBack={() => setStep("mode")}
+        />
+      );
+    }
+
+    return (
+      <DifficultySelect
+        mode={mode}
+        onSelect={diff => {
+          setAiDifficulty(diff);
+          // Set up decks for the AI match
+          const playerDeck = activeDeck;
+          const aiDeck     = makeRandomDeck("AI Deck");
+          if (mode === "ai-black") {
+            setWhiteDeck(playerDeck);
+            setBlackDeck(aiDeck);
+          } else {
+            setWhiteDeck(aiDeck);
+            setBlackDeck(playerDeck);
+          }
+          setStep("battle");
+        }}
+        onBack={() => setStep("mode")}
+      />
+    );
+  }
+
+  // ── PvP: Player 1 deck picker ────────────────────────────────
+  if (step === "deck-p1") {
+    return (
+      <DeckPickerPvP
+        allDecks={allDecks}
+        step="deck-p1"
+        onConfirm={deck => {
+          setWhiteDeck(deck);
+          setStep("deck-p2");
+        }}
+        onBack={() => setStep("mode")}
+      />
+    );
+  }
+
+  // ── PvP: Player 2 deck picker ────────────────────────────────
+  if (step === "deck-p2") {
+    return (
+      <DeckPickerPvP
+        allDecks={allDecks}
+        step="deck-p2"
+        onConfirm={deck => {
+          setBlackDeck(deck);
+          setMode("pvp");
+          setStep("battle");
+        }}
+        onBack={() => setStep("deck-p1")}
+      />
+    );
+  }
+
+  // ── Battle ───────────────────────────────────────────────────
+  if (step === "battle" && whiteDeck && blackDeck && mode) {
+    return (
+      <BattleView
+        key={rematchKey}
+        whiteDeck={whiteDeck}
+        blackDeck={blackDeck}
+        mode={mode}
+        aiDifficulty={aiDifficulty}
+        onRematch={() => {
+          if (mode !== "pvp") {
+            // Regenerate AI deck and stay in battle
+            const activeDeckId = loadActiveDeckId();
+            const activeDeck   = allDecks.find(d => d.id === activeDeckId) ?? allDecks[0];
+            const aiDeck       = makeRandomDeck("AI Deck");
+            if (mode === "ai-black") {
+              setWhiteDeck(activeDeck);
+              setBlackDeck(aiDeck);
+            } else {
+              setWhiteDeck(aiDeck);
+              setBlackDeck(activeDeck);
+            }
+          }
+          // PvP rematch keeps same decks
+          setRematchKey(k => k + 1);
+        }}
+      />
+    );
+  }
+
+  // Fallback
+  return null;
 }
