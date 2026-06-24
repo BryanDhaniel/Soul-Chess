@@ -16,6 +16,20 @@ import type { GameState, Piece } from "../types/game";
 import { coordKey } from "../lib/boardUtils";
 import { getPieceDefinitionById } from "../lib/pieceRegistry";
 
+// Soul Mimic shimmer keyframe (injected once alongside captureFlash)
+const SOUL_MIMIC_KEYFRAME = `
+@keyframes soulMimicShimmer {
+  0%   { box-shadow: 0 0 0 2px #9b6de0, 0 0 8px 2px rgba(155,109,224,0.6); }
+  50%  { box-shadow: 0 0 0 2.5px #c9a84c, 0 0 14px 4px rgba(201,168,76,0.55); }
+  100% { box-shadow: 0 0 0 2px #9b6de0, 0 0 8px 2px rgba(155,109,224,0.6); }
+}
+@keyframes soulMimicPulse {
+  0%   { opacity: 0.85; transform: scale(1.0); }
+  50%  { opacity: 1.0;  transform: scale(1.06); }
+  100% { opacity: 0.85; transform: scale(1.0); }
+}
+`;
+
 interface BoardProps {
   state: GameState;
   onTileClick: (row: number, col: number, piece: Piece | null) => void;
@@ -95,11 +109,25 @@ function PieceTokenVisual({
   flash: boolean;
   dying: boolean;
 }) {
-  const def     = getPieceDefinitionById(piece.definitionId);
-  const fc      = FACTION_COLOR[def.faction] ?? "#c9a84c";
-  const size    = Math.max(14, cellSize * 0.72);
-  const fs      = Math.max(8, size * 0.48);
-  const isWhite = piece.owner === "white";
+  // Soul Mimic: if disguised, show the mimicked piece's look
+  const isMimicking  = Boolean(piece.mimicDefinitionId);
+  const displayDefId = piece.mimicDefinitionId ?? piece.definitionId;
+  const def          = getPieceDefinitionById(displayDefId);
+  const baseDef      = getPieceDefinitionById(piece.definitionId); // always the true type
+  const fc           = FACTION_COLOR[def.faction] ?? "#c9a84c";
+  const size         = Math.max(14, cellSize * 0.72);
+  const fs           = Math.max(8, size * 0.48);
+  const badgeFs      = Math.max(6, size * 0.28);  // small pawn badge
+  const isWhite      = piece.owner === "white";
+
+  // Mimic shimmer replaces the tier shadow
+  const tokenShadow = isMimicking
+    ? undefined   // set via animation below
+    : isSelected
+      ? `0 0 0 2px ${fc}, ${TIER_SHADOW[def.tier]}`
+      : isWhite
+        ? TIER_SHADOW[def.tier]
+        : `0 0 0 1px rgba(255,255,255,0.15), 0 2px 6px rgba(0,0,0,0.5), ${TIER_SHADOW[def.tier]}`;
 
   return (
     <div
@@ -120,6 +148,18 @@ function PieceTokenVisual({
         />
       )}
 
+      {/* Soul Mimic outer aura ring (pulsing purple-gold shimmer) */}
+      {isMimicking && (
+        <div
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            width: size + 6, height: size + 6,
+            animation: "soulMimicShimmer 1.6s ease-in-out infinite",
+            borderRadius: "50%",
+          }}
+        />
+      )}
+
       {/* Token body */}
       <div
         className="flex items-center justify-center rounded-full"
@@ -128,15 +168,14 @@ function PieceTokenVisual({
           background: isWhite
             ? "linear-gradient(135deg,#fdfbf7 0%,#e8e0d0 100%)"
             : "linear-gradient(135deg,#3a4258 0%,#1a1f30 100%)",
-          border: `1.5px solid ${isSelected ? fc : isWhite ? "#c9a84c80" : "#9babcc"}`,
-          boxShadow: isSelected
-            ? `0 0 0 2px ${fc}, ${TIER_SHADOW[def.tier]}`
-            : isWhite
-              ? TIER_SHADOW[def.tier]
-              : `0 0 0 1px rgba(255,255,255,0.15), 0 2px 6px rgba(0,0,0,0.5), ${TIER_SHADOW[def.tier]}`,
+          border: isMimicking
+            ? `2px solid rgba(155,109,224,0.9)`
+            : `1.5px solid ${isSelected ? fc : isWhite ? "#c9a84c80" : "#9babcc"}`,
+          boxShadow: tokenShadow,
+          animation: isMimicking ? "soulMimicShimmer 1.6s ease-in-out infinite" : undefined,
           // Slight lift when selected
           transform: isSelected ? "scale(1.08)" : "scale(1)",
-          transition: `transform 150ms ease`,
+          transition: isMimicking ? undefined : `transform 150ms ease`,
         }}
       >
         <span style={{
@@ -147,6 +186,30 @@ function PieceTokenVisual({
         </span>
       </div>
 
+      {/* Soul Mimic badge — small pawn symbol in bottom-right corner */}
+      {isMimicking && (
+        <div
+          className="absolute bottom-0 right-0 flex items-center justify-center rounded-full"
+          style={{
+            width: Math.max(9, size * 0.38),
+            height: Math.max(9, size * 0.38),
+            fontSize: badgeFs,
+            lineHeight: 1,
+            background: isWhite
+              ? "linear-gradient(135deg,#9b6de0 0%,#6d3fcf 100%)"
+              : "linear-gradient(135deg,#c9a84c 0%,#8c6b1f 100%)",
+            border: `1.5px solid ${isWhite ? "#c9a84c" : "#9b6de0"}`,
+            boxShadow: `0 0 5px ${isWhite ? "rgba(155,109,224,0.8)" : "rgba(201,168,76,0.8)"}`,
+            zIndex: 5,
+            animation: "soulMimicPulse 1.6s ease-in-out infinite",
+          }}
+        >
+          <span style={{ color: "#fff", display: "block" }}>
+            {baseDef.symbol}
+          </span>
+        </div>
+      )}
+
       {/* Owner dot */}
       <div
         className="absolute top-0.5 right-0.5 rounded-full"
@@ -155,6 +218,8 @@ function PieceTokenVisual({
           height: Math.max(3, cellSize * 0.1),
           background: isWhite ? fc : "#9b6de0",
           boxShadow: `0 0 3px ${isWhite ? fc : "#9b6de0"}`,
+          // Hide owner dot when mimic badge occupies the same corner
+          opacity: isMimicking ? 0 : 1,
         }}
       />
     </div>
@@ -300,13 +365,14 @@ export function Board({ state, onTileClick, flipped = false }: BoardProps) {
 
   return (
     <>
-      {/* Keyframe for capture flash — injected once */}
+      {/* Keyframes for capture flash + Soul Mimic shimmer — injected once */}
       <style>{`
         @keyframes captureFlash {
           0%   { opacity: 0.9; transform: scale(1.15); }
           60%  { opacity: 0.6; transform: scale(1.05); }
           100% { opacity: 0;   transform: scale(1);    }
         }
+        ${SOUL_MIMIC_KEYFRAME}
       `}</style>
 
       <div

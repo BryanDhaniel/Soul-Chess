@@ -203,18 +203,8 @@ function switchPlayer(state: GameState): GameState {
       })),
     };
 
-    // Soul Mimic revert check — disguise ends once we reach the stored revert turn
-    if (piece.mimicDefinitionId && piece.mimicRevertTurn !== undefined) {
-      if (turnNumber >= piece.mimicRevertTurn) {
-        piece = {
-          ...piece,
-          definitionId: piece.baseDefinitionId ?? piece.definitionId,
-          mimicDefinitionId: undefined,
-          mimicRevertTurn: undefined,
-          baseDefinitionId: undefined,
-        };
-      }
-    }
+    // Soul Mimic is now action-based (cleared when the pawn moves), not time-based.
+    // No turn-number revert check here.
 
     newPieces[id] = piece;
   }
@@ -419,7 +409,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         if (!state.board[pt.row][pt.col].pieceId) dest = pt;
       }
 
-      const moved: Piece = { ...piece, position: dest, hasActed: true };
+      let moved: Piece = { ...piece, position: dest, hasActed: true };
+
+      // Soul Mimic: disguise ends the moment the pawn uses its movement action.
+      // (Captures are handled in ATTACK_PIECE — a new mimic replaces the old one.)
+      if (moved.mimicDefinitionId) {
+        moved = {
+          ...moved,
+          definitionId: moved.baseDefinitionId ?? moved.definitionId,
+          mimicDefinitionId: undefined,
+          mimicRevertTurn: undefined,
+          baseDefinitionId: undefined,
+        };
+      }
 
       const record: TurnRecord = {
         turn: state.turnNumber, player: state.currentPlayer,
@@ -469,13 +471,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...attacker, hasActed: true, position: defender.position,
       };
 
-      // ── Soul Mimic (Iron Pawn) — disguise as the captured piece for 1 turn ──
+      // ── Soul Mimic (Iron Pawn) — disguise as the captured piece ──
+      // Mimic persists until the pawn itself moves (cleared in MOVE_PIECE).
+      // Capturing again while disguised simply overwrites with the new capture.
       if (attacker.definitionId === "iron_pawn" && defender.definitionId !== "soul_king") {
         updatedAttacker = {
           ...updatedAttacker,
           baseDefinitionId: attacker.baseDefinitionId ?? attacker.definitionId,
           mimicDefinitionId: defender.definitionId,
-          mimicRevertTurn: state.turnNumber + 2, // reverts at the start of attacker's NEXT turn
+          mimicRevertTurn: undefined, // no longer time-based; action-based only
         };
       }
 
