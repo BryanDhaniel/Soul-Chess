@@ -4,6 +4,8 @@
 
 **A fantasy variant of classic chess — a 16×16 octagonal board, 20 troops per player, and a unique magical ability on every piece.**
 
+<img width="696" height="577" alt="image" src="https://github.com/user-attachments/assets/eab795d7-39f0-4d98-a41c-2cbb7c0cc520" />
+
 </div>
 
 ---
@@ -32,7 +34,8 @@ The project is built entirely with **Next.js (App Router) + TypeScript**, with n
 ---
 
 ## 🖼️ Screenshots
-
+<img width="1365" height="634" alt="image" src="https://github.com/user-attachments/assets/487bd967-e85a-409a-b5fd-536ae9417751" />
+<img width="1365" height="637" alt="image" src="https://github.com/user-attachments/assets/84247154-9dd4-45c3-b046-c5abea684f50" />
 
 ---
 
