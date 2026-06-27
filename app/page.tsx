@@ -337,7 +337,7 @@ export default function App(): JSX.Element {
                 {/* Info */}
                 <div className="flex flex-col overflow-hidden">
                   <span className="font-serif font-semibold text-sm text-[#1e3a6e] truncate">
-                    Archmage Rowan
+                    Archmage
                   </span>
                   <span
                     className="flex items-center gap-1 font-medium uppercase truncate"
