@@ -24,7 +24,8 @@ function makePiece(definitionId: string, owner: Player, position: Coord): Piece 
     id: `${definitionId}_${owner}_${++_uid}`,
     definitionId, owner,
     position, hasActed: false,
-    abilities: def.abilities.map(ab => ({ ...ab, currentCooldown: 0 })),
+    // Start at full cooldown so abilities cannot be used immediately on turn 1.
+    abilities: def.abilities.map(ab => ({ ...ab, currentCooldown: ab.cooldown })),
     buffs: [],
   };
 }
@@ -191,15 +192,20 @@ function switchPlayer(state: GameState): GameState {
   const next: Player = state.currentPlayer === "white" ? "black" : "white";
   const turnNumber = next === "white" ? state.turnNumber + 1 : state.turnNumber;
 
+  const justPlayed = state.currentPlayer;
   const newPieces: Record<string, Piece> = {};
   for (const [id, p] of Object.entries(state.pieces)) {
+    // Cooldowns only tick down for the player who just finished their turn.
+    // This makes cooldown "4" mean "4 of YOUR turns", not "4 half-turns total".
+    const tickCooldown = p.owner === justPlayed;
     let piece: Piece = {
       ...p, hasActed: false,
       buffs: p.buffs
         .map(b => ({ ...b, duration: b.duration === -1 ? -1 : b.duration - 1 }))
         .filter(b => b.duration !== 0),
       abilities: p.abilities.map(ab => ({
-        ...ab, currentCooldown: Math.max(0, ab.currentCooldown - 1),
+        ...ab,
+        currentCooldown: tickCooldown ? Math.max(0, ab.currentCooldown - 1) : ab.currentCooldown,
       })),
     };
 

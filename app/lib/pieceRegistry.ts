@@ -25,7 +25,7 @@ const DEFINITIONS: PieceDefinition[] = [
       {
         id: "royal_swap", name: "Royal Swap",
         description: "Swap places with any one friendly piece on the board (a piece must be available to swap with).",
-        cooldown: 3, range: 0,
+        cooldown: 4, range: 0,
       },
     ],
   },
