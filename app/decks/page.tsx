@@ -8,6 +8,7 @@ import {
   ChevronLeft, Plus, Trash2, Edit2, Star, Play,
   X, Crown, Check, AlertCircle,
 } from "lucide-react";
+import type { DragEvent } from "react";
 import type { DeckConfig, FormationSlot, PieceDefinition, Coord } from "../types/game";
 import { getAllDefinitions, getPieceDefinitionById } from "../lib/pieceRegistry";
 import {
@@ -52,9 +53,10 @@ function OrnDivider() {
 
 // ─── Piece Card ───────────────────────────────────────────────
 function PieceCard({
-  def, selected, count, onClick,
+  def, selected, count, onClick, onDragStart,
 }: {
   def: PieceDefinition; selected: boolean; count: number; onClick: () => void;
+  onDragStart?: (e: DragEvent<HTMLButtonElement>) => void;
 }) {
   const fc      = FACTION_COLOR[def.faction] ?? "#c9a84c";
   const rule    = REQUIRED_PIECES[def.typeId];
@@ -63,6 +65,8 @@ function PieceCard({
   return (
     <button
       onClick={isMaxed ? undefined : onClick}
+      draggable={!isMaxed}
+      onDragStart={isMaxed ? undefined : onDragStart}
       className="relative flex items-center gap-2.5 w-full px-3 py-2.5 text-left transition-all"
       style={{
         background: isMaxed
@@ -73,7 +77,7 @@ function PieceCard({
         border: `1px solid ${isMaxed ? "rgba(74,222,128,0.35)" : selected ? fc : "rgba(201,168,76,0.18)"}`,
         borderRadius: 10,
         boxShadow: selected && !isMaxed ? `0 0 0 2px ${fc}30` : "none",
-        cursor: isMaxed ? "default" : "pointer",
+        cursor: isMaxed ? "default" : "grab",
         opacity: isMaxed ? 0.7 : 1,
         transform: selected && !isMaxed ? "scale(1.01)" : "scale(1)",
         transition: "all 0.15s ease",
@@ -135,11 +139,20 @@ function PieceCard({
 
 // ─── Board Preview ────────────────────────────────────────────
 function BoardPreview({
-  slots, selectedDef, onTileClick,
+  slots, selectedDef, onTileClick, moveFrom, dragOverCoord,
+  onPieceDragStart, onPieceDragEnd, onTileDragOver, onTileDragLeave, onTileDrop, onRemovePiece,
 }: {
   slots: FormationSlot[];
   selectedDef: PieceDefinition | null;
   onTileClick: (coord: Coord) => void;
+  moveFrom: Coord | null;
+  dragOverCoord: Coord | null;
+  onPieceDragStart: (coord: Coord, e: DragEvent<HTMLDivElement>) => void;
+  onPieceDragEnd: () => void;
+  onTileDragOver: (coord: Coord) => void;
+  onTileDragLeave: () => void;
+  onTileDrop: (coord: Coord, e: DragEvent<HTMLDivElement>) => void;
+  onRemovePiece: (coord: Coord) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(28);
@@ -196,6 +209,8 @@ function BoardPreview({
           const fc             = def ? (FACTION_COLOR[def.faction] ?? "#c9a84c") : null;
           const isLight        = (row + col) % 2 === 0;
           const baseBg         = isLight ? "#f8f4ec" : "#2c2c2c";
+          const isPicked        = !!moveFrom && moveFrom.row === row && moveFrom.col === col;
+          const isDropTarget    = !!dragOverCoord && dragOverCoord.row === row && dragOverCoord.col === col && !isPicked;
 
           return (
             <div
@@ -206,6 +221,9 @@ function BoardPreview({
                 cursor: inZone ? "pointer" : "default",
               }}
               onClick={() => inZone && onTileClick(coord)}
+              onDragOver={e => { if (inZone) { e.preventDefault(); onTileDragOver(coord); } }}
+              onDragLeave={() => inZone && onTileDragLeave()}
+              onDrop={e => { if (inZone) { e.preventDefault(); onTileDrop(coord, e); } }}
             >
               {/* Zone tint */}
               {inZone && (
@@ -222,16 +240,41 @@ function BoardPreview({
               )}
 
               {/* Hover ring (empty zone + piece selected) */}
-              {inZone && !def && selectedDef && (
+              {inZone && !def && selectedDef && !moveFrom && (
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{ boxShadow: "inset 0 0 0 1px rgba(201,168,76,0.4)" }}
                 />
               )}
 
+              {/* Picked-up piece (move mode active) */}
+              {isPicked && (
+                <div
+                  className="absolute inset-0 pointer-events-none z-10"
+                  style={{
+                    boxShadow: "inset 0 0 0 2px #c9a84c",
+                    animation: "pulse 1s ease-in-out infinite",
+                  }}
+                />
+              )}
+
+              {/* Active drop target — drag-and-drop or move-mode destination */}
+              {inZone && isDropTarget && (
+                <div
+                  className="absolute inset-0 pointer-events-none z-10"
+                  style={{
+                    boxShadow: `inset 0 0 0 2px ${def ? "#3b82f6" : "#4ade80"}`,
+                    background: def ? "rgba(59,130,246,0.12)" : "rgba(74,222,128,0.12)",
+                  }}
+                />
+              )}
+
               {/* Placed piece */}
               {def && (
                 <div
+                  draggable
+                  onDragStart={e => { e.stopPropagation(); onPieceDragStart(coord, e); }}
+                  onDragEnd={onPieceDragEnd}
                   className="relative flex items-center justify-center rounded-full z-10"
                   style={{
                     width:    Math.max(12, cellSize * 0.72),
@@ -240,23 +283,26 @@ function BoardPreview({
                     background: "linear-gradient(135deg,#fdfbf7 0%,#e8e0d0 100%)",
                     border: `1.5px solid ${fc}`,
                     boxShadow: `0 0 0 1px ${fc}50`,
+                    opacity: isPicked ? 0.45 : 1,
+                    cursor: "grab",
+                    transition: "opacity 0.15s ease",
                   }}
                 >
                   <span style={{ lineHeight: 1, display: "block", marginTop: 1, color: "#1e2535" }}>{def.symbol}</span>
                   {/* Remove btn */}
                   <button
-                    onClick={e => { e.stopPropagation(); onTileClick(coord); }}
+                    onClick={e => { e.stopPropagation(); onRemovePiece(coord); }}
                     className="absolute -top-1 -right-1 rounded-full flex items-center justify-center z-20"
                     style={{
                       width:    Math.max(10, cellSize * 0.3),
                       height:   Math.max(10, cellSize * 0.3),
                       background: "#f87171",
                       border: "1px solid white",
-                      opacity: 0,
+                      opacity: isPicked ? 1 : 0,
                       transition: "opacity 0.15s",
                     }}
                     onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-                    onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
+                    onMouseLeave={e => { if (!isPicked) e.currentTarget.style.opacity = "0"; }}
                   >
                     <X style={{ width: "55%", height: "55%", color: "white" }} />
                   </button>
@@ -316,8 +362,18 @@ export default function DecksPage() {
   const [selectedDef, setSelectedDef] = useState<PieceDefinition | null>(null);
   const [renamingId, setRenamingId]   = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [moveFrom, setMoveFrom]       = useState<Coord | null>(null);
+  const [dragOverCoord, setDragOverCoord] = useState<Coord | null>(null);
 
   useEffect(() => { setTimeout(() => setMounted(true), 30); }, []);
+
+  // ── Cancel move-mode with Escape ─────────────────────────
+  useEffect(() => {
+    if (!moveFrom) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMoveFrom(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moveFrom]);
 
   // ── Load ─────────────────────────────────────────────────
   useEffect(() => {
@@ -336,29 +392,131 @@ export default function DecksPage() {
     setDecks(next); saveDecks(next);
   }, []);
 
-  // ── Tile click ────────────────────────────────────────────
+  // ── Move / swap a piece already on the board ─────────────
+  const movePieceTo = useCallback((from: Coord, to: Coord) => {
+    if (!editingDeck) return;
+    if (!isInDeployZone(to)) return;
+    const fromSlot = editingDeck.slots.find(s => s.coord.row === from.row && s.coord.col === from.col);
+    if (!fromSlot) return;
+    const toSlot = editingDeck.slots.find(s => s.coord.row === to.row && s.coord.col === to.col);
+
+    const nextSlots = toSlot
+      // Both tiles occupied → swap the two pieces' positions.
+      ? editingDeck.slots.map(s => {
+          if (s === fromSlot) return { ...s, coord: to };
+          if (s === toSlot) return { ...s, coord: from };
+          return s;
+        })
+      // Target empty → just move into it.
+      : editingDeck.slots.map(s => (s === fromSlot ? { ...s, coord: to } : s));
+
+    const updated = { ...editingDeck, slots: nextSlots };
+    setEditingDeck(updated);
+    persist(upsertDeck(decks, updated));
+  }, [editingDeck, decks, persist]);
+
+  // ── Tile click: place new piece, OR pick up / drop an existing one ──
   const handleTileClick = useCallback((coord: Coord) => {
     if (!editingDeck) return;
+
+    // A piece is currently picked up — this click chooses its destination.
+    if (moveFrom) {
+      if (moveFrom.row === coord.row && moveFrom.col === coord.col) {
+        setMoveFrom(null); // tapped the same tile again → cancel
+        return;
+      }
+      movePieceTo(moveFrom, coord);
+      setMoveFrom(null);
+      return;
+    }
+
     const existing = editingDeck.slots.find(
       s => s.coord.row === coord.row && s.coord.col === coord.col
     );
-    let updated: DeckConfig;
+
     if (existing) {
-      updated = { ...editingDeck, slots: editingDeck.slots.filter(s => s !== existing) };
-    } else {
-      if (!selectedDef) return;
-      if (editingDeck.slots.length >= MAX_PIECES) return;
-      const rule = REQUIRED_PIECES[selectedDef.typeId];
-      if (rule) {
-        const already = editingDeck.slots.filter(s => s.definitionId === selectedDef.typeId).length;
-        if (already >= rule.max) return;
-      }
-      const newSlot: FormationSlot = { coord, definitionId: selectedDef.typeId };
-      updated = { ...editingDeck, slots: [...editingDeck.slots, newSlot] };
+      // Pick the piece up instead of deleting it — tap an empty tile (or
+      // another piece, to swap) to move it. Use the small × button to delete.
+      setMoveFrom(coord);
+      return;
     }
+
+    if (!selectedDef) return;
+    if (editingDeck.slots.length >= MAX_PIECES) return;
+    const rule = REQUIRED_PIECES[selectedDef.typeId];
+    if (rule) {
+      const already = editingDeck.slots.filter(s => s.definitionId === selectedDef.typeId).length;
+      if (already >= rule.max) return;
+    }
+    const newSlot: FormationSlot = { coord, definitionId: selectedDef.typeId };
+    const updated = { ...editingDeck, slots: [...editingDeck.slots, newSlot] };
     setEditingDeck(updated);
     persist(upsertDeck(decks, updated));
-  }, [editingDeck, selectedDef, decks, persist]);
+  }, [editingDeck, selectedDef, decks, persist, moveFrom, movePieceTo]);
+
+  // ── Explicit delete (the small × button) ─────────────────
+  const handleRemovePiece = useCallback((coord: Coord) => {
+    if (!editingDeck) return;
+    const updated = {
+      ...editingDeck,
+      slots: editingDeck.slots.filter(s => !(s.coord.row === coord.row && s.coord.col === coord.col)),
+    };
+    setEditingDeck(updated);
+    persist(upsertDeck(decks, updated));
+    setMoveFrom(prev => (prev && prev.row === coord.row && prev.col === coord.col) ? null : prev);
+  }, [editingDeck, decks, persist]);
+
+  // ── Drag-and-drop (desktop: drag pieces on the board, or drag a
+  //    roster card straight onto the board to place a new piece) ──
+  const handlePieceDragStart = useCallback((coord: Coord, e: DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ kind: "move", coord }));
+    e.dataTransfer.effectAllowed = "move";
+    setMoveFrom(coord);
+  }, []);
+
+  const handlePieceDragEnd = useCallback(() => {
+    setMoveFrom(null);
+    setDragOverCoord(null);
+  }, []);
+
+  const handleNewPieceDragStart = useCallback((def: PieceDefinition, e: DragEvent<HTMLButtonElement>) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ kind: "new", defId: def.typeId }));
+    e.dataTransfer.effectAllowed = "copy";
+  }, []);
+
+  const handleTileDragOver = useCallback((coord: Coord) => {
+    setDragOverCoord(coord);
+  }, []);
+
+  const handleTileDragLeave = useCallback(() => {
+    setDragOverCoord(null);
+  }, []);
+
+  const handleTileDrop = useCallback((coord: Coord, e: DragEvent<HTMLDivElement>) => {
+    setDragOverCoord(null);
+    const raw = e.dataTransfer.getData("application/json");
+    if (!raw || !editingDeck) { setMoveFrom(null); return; }
+    let payload: { kind: "move"; coord: Coord } | { kind: "new"; defId: string };
+    try { payload = JSON.parse(raw); } catch { setMoveFrom(null); return; }
+
+    if (payload.kind === "move") {
+      movePieceTo(payload.coord, coord);
+    } else {
+      const def = getPieceDefinitionById(payload.defId);
+      if (!def) { setMoveFrom(null); return; }
+      const existing = editingDeck.slots.find(s => s.coord.row === coord.row && s.coord.col === coord.col);
+      if (existing || editingDeck.slots.length >= MAX_PIECES) { setMoveFrom(null); return; }
+      const rule = REQUIRED_PIECES[def.typeId];
+      if (rule) {
+        const already = editingDeck.slots.filter(s => s.definitionId === def.typeId).length;
+        if (already >= rule.max) { setMoveFrom(null); return; }
+      }
+      const updated = { ...editingDeck, slots: [...editingDeck.slots, { coord, definitionId: def.typeId }] };
+      setEditingDeck(updated);
+      persist(upsertDeck(decks, updated));
+    }
+    setMoveFrom(null);
+  }, [editingDeck, decks, persist, movePieceTo]);
 
   // ── Deck CRUD ─────────────────────────────────────────────
   const handleNewDeck = useCallback(() => {
@@ -580,9 +738,11 @@ export default function DecksPage() {
                   {editingDeck?.name ?? "—"}
                 </h2>
                 <p className="text-[10px] text-[#8b7d6b] mt-0.5">
-                  {selectedDef
-                    ? `Placing ${selectedDef.name} → click zone`
-                    : "Select a piece → click your zone (bottom rows)"}
+                  {moveFrom
+                    ? "Piece picked up → tap or drag to a tile to move it (Esc to cancel)"
+                    : selectedDef
+                      ? `Placing ${selectedDef.name} → click zone`
+                      : "Select a piece → click your zone (bottom rows), or drag a piece to move it"}
                 </p>
               </div>
 
@@ -654,6 +814,14 @@ export default function DecksPage() {
                     slots={editingDeck.slots}
                     selectedDef={selectedDef}
                     onTileClick={handleTileClick}
+                    moveFrom={moveFrom}
+                    dragOverCoord={dragOverCoord}
+                    onPieceDragStart={handlePieceDragStart}
+                    onPieceDragEnd={handlePieceDragEnd}
+                    onTileDragOver={handleTileDragOver}
+                    onTileDragLeave={handleTileDragLeave}
+                    onTileDrop={handleTileDrop}
+                    onRemovePiece={handleRemovePiece}
                   />
                 ) : (
                   <div
@@ -671,6 +839,7 @@ export default function DecksPage() {
               {[
                 { color: "rgba(74,222,128,0.18)",  border: "rgba(74,222,128,0.4)", label: "Deploy zone" },
                 { color: "rgba(201,168,76,0.22)",  border: "#c9a84c55",            label: "Piece placed" },
+                { color: "rgba(201,168,76,0.18)",  border: "#c9a84c",              label: "Picked up — tap/drag to move" },
               ].map(({ color, border, label }) => (
                 <div key={label} className="flex items-center gap-1.5">
                   <div className="w-3.5 h-3.5 rounded-sm border" style={{ background: color, borderColor: border }} />
@@ -690,6 +859,7 @@ export default function DecksPage() {
                     selected={selectedDef?.typeId === def.typeId}
                     count={defCountMap.get(def.typeId) ?? 0}
                     onClick={() => setSelectedDef(p => p?.typeId === def.typeId ? null : def)}
+                    onDragStart={e => handleNewPieceDragStart(def, e)}
                   />
                 ))}
               </div>
@@ -727,6 +897,7 @@ export default function DecksPage() {
                     selected={selectedDef?.typeId === def.typeId}
                     count={defCountMap.get(def.typeId) ?? 0}
                     onClick={() => setSelectedDef(p => p?.typeId === def.typeId ? null : def)}
+                    onDragStart={e => handleNewPieceDragStart(def, e)}
                   />
                 </div>
               ))}
